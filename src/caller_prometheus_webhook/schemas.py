@@ -6,9 +6,11 @@ for high performance and strict type checking.
 """
 
 from __future__ import annotations
+
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import Any, Mapping, Sequence
+from typing import Any
 
 
 class NotificationMode(StrEnum):
@@ -111,6 +113,70 @@ class WebhookPayload:
             alerts=parsed_alerts,
             receiver=str(data.get("receiver") or ""),
         )
+
+
+# Human readable text fields used by non-Alertmanager callers (Zabbix, CI,
+# generic webhook media types). First non-empty field wins.
+_FLAT_TEXT_FIELDS: tuple[str, ...] = (
+    "message",
+    "Message",
+    "description",
+    "Description",
+    "body",
+    "content",
+    "subject",
+    "Subject",
+    "title",
+    "alert",
+    "event_name",
+)
+
+
+def _flatten_text(value: Any) -> str | None:
+    """Returns a usable string from a scalar or ``{"content": ...}`` mapping."""
+    if isinstance(value, str):
+        stripped = value.strip()
+        return stripped or None
+    if isinstance(value, Mapping):
+        inner = value.get("content") or value.get("text") or value.get("message")
+        return _flatten_text(inner)
+    if isinstance(value, (int, float)):
+        return str(value)
+    return None
+
+
+def extract_alert_messages(payload: Mapping[str, Any]) -> list[str]:
+    """
+    Extracts the alert text from an inbound webhook payload.
+
+    Understands the Prometheus Alertmanager envelope (firing alerts only) and,
+    as a fallback, the flat JSON bodies produced by Zabbix and other systems -
+    e.g. ``{"message": "{ALERT.MESSAGE}"}``, ``{"subject": "...", "body": "..."}``
+    or a bare ``{"description": "..."}``. Resolved alerts are never returned.
+
+    Args:
+        payload: Parsed JSON body of the webhook request.
+
+    Returns:
+        list: Alert messages to dispatch (empty when nothing usable is found).
+    """
+    if not isinstance(payload, Mapping):
+        return []
+
+    envelope = WebhookPayload.from_dict(dict(payload))
+    firing = [
+        alert.description
+        for alert in envelope.alerts
+        if alert.is_firing and alert.description and alert.description != "No data"
+    ]
+    if firing:
+        return firing
+
+    for field_name in _FLAT_TEXT_FIELDS:
+        text = _flatten_text(payload.get(field_name))
+        if text:
+            return [text]
+    return []
 
 
 @dataclass(slots=True, frozen=True)

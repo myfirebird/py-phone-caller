@@ -75,6 +75,12 @@
                         <i class="bi bi-journal-bookmark me-1"></i>{{ _('Address Book') }}
                     </a>
                 </li>
+                <li class="nav-item">
+                    <a class="nav-link {% if request.endpoint == 'prober_blueprint.prober' %}active{% endif %}"
+                       href="{{ url_for('prober_blueprint.prober') }}">
+                        <i class="bi bi-broadcast-pin me-1"></i>{{ _('Duty & Prober') }}
+                    </a>
+                </li>
 
                 <!-- Quick On-Call Duty Roster Indicator & Toggle -->
                 <li class="nav-item dropdown">
@@ -460,20 +466,82 @@
                 </div>
             </div>
 
-            <!-- Prometheus Alertmanager & Webhooks -->
-            <div class="accordion-item border rounded-3 mb-2 overflow-hidden help-topic-item" data-section="home" data-keywords="prometheus alertmanager webhook grafana api curl dispatch json trigger">
-                <h2 class="accordion-header" id="headingProm">
-                    <button class="accordion-button collapsed fw-semibold text-body" type="button" data-bs-toggle="collapse" data-bs-target="#collapseProm" aria-expanded="false" aria-controls="collapseProm">
-                        <i class="bi bi-bell text-secondary me-2"></i>{{ _('Prometheus & Webhook Triggering') }}
+            <!-- Webhook Integration Guide (Alertmanager & Zabbix) -->
+            <div class="accordion-item border rounded-3 mb-2 overflow-hidden help-topic-item" data-section="webhook" data-keywords="webhook alertmanager zabbix prometheus grafana api curl dispatch json trigger duty group token endpoint call sms payload">
+                <h2 class="accordion-header" id="headingWebhook">
+                    <button class="accordion-button collapsed fw-semibold text-body" type="button" data-bs-toggle="collapse" data-bs-target="#collapseWebhook" aria-expanded="false" aria-controls="collapseWebhook">
+                        <i class="bi bi-bell text-secondary me-2"></i>{{ _('Webhook Integration Guide') }}
                     </button>
                 </h2>
-                <div id="collapseProm" class="accordion-collapse collapse" aria-labelledby="headingProm" data-bs-parent="#helpAccordion">
+                <div id="collapseWebhook" class="accordion-collapse collapse" aria-labelledby="headingWebhook" data-bs-parent="#helpAccordion">
                     <div class="accordion-body small text-secondary">
-                        <p class="mb-2"><strong>{{ _('Alertmanager Receiver:') }}</strong> {{ _('Configure Alertmanager to forward firing alerts to the webhook service:') }}</p>
-                        <div class="bg-body-tertiary p-2 rounded font-monospace small mb-2 text-break">
-                            POST http://localhost:8084/alert
+                        <p class="mb-2"><strong>{{ _('Duty Group Endpoints:') }}</strong> {{ _('Pick the endpoint matching the channels you want; the URL suffix selects the notification mode. /call_only and /call are equivalent, as are /sms_only and /sms.') }}</p>
+                        <div class="bg-body-tertiary p-2 rounded font-monospace small mb-1 text-break border d-flex justify-content-between align-items-center">
+                            <span class="text-truncate">POST {{ webhook_base_url }}/call_only</span>
+                            <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2 ms-2" onclick="copyToClipboard('{{ webhook_base_url }}/call_only')" title="{{ _('Copy URL') }}"><i class="bi bi-clipboard"></i></button>
                         </div>
-                        <p class="mb-0">{{ _('Incoming alerts automatically resolve duty on-call contacts, synthesize speech, and initiate emergency phone calls.') }}</p>
+                        <div class="bg-body-tertiary p-2 rounded font-monospace small mb-1 text-break border d-flex justify-content-between align-items-center">
+                            <span class="text-truncate">POST {{ webhook_base_url }}/sms_only</span>
+                            <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2 ms-2" onclick="copyToClipboard('{{ webhook_base_url }}/sms_only')" title="{{ _('Copy URL') }}"><i class="bi bi-clipboard"></i></button>
+                        </div>
+                        <div class="bg-body-tertiary p-2 rounded font-monospace small mb-1 text-break border d-flex justify-content-between align-items-center">
+                            <span class="text-truncate">POST {{ webhook_base_url }}/sms_before_call</span>
+                            <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2 ms-2" onclick="copyToClipboard('{{ webhook_base_url }}/sms_before_call')" title="{{ _('Copy URL') }}"><i class="bi bi-clipboard"></i></button>
+                        </div>
+                        <div class="bg-body-tertiary p-2 rounded font-monospace small mb-3 text-break border d-flex justify-content-between align-items-center">
+                            <span class="text-truncate">POST {{ webhook_base_url }}/call_and_sms</span>
+                            <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2 ms-2" onclick="copyToClipboard('{{ webhook_base_url }}/call_and_sms')" title="{{ _('Copy URL') }}"><i class="bi bi-clipboard"></i></button>
+                        </div>
+
+                        <p class="mb-1"><strong>{{ _('Target a specific duty group:') }}</strong></p>
+                        <div class="bg-body-tertiary p-2 rounded font-monospace small mb-3 text-break border">POST {{ webhook_base_url }}/call_only?group_id=&lt;group_id&gt;&amp;token=&lt;group_token&gt;</div>
+                        <p class="mb-3">{{ _('The group id and token are shown on the Duty & Prober page; group_id is permanent, so renaming the group never changes the URL. ?group=<name> is still accepted for compatibility.') }}</p>
+
+                        <hr class="my-3">
+                        <p class="mb-1"><strong>{{ _('Trigger a probe on demand (Zabbix):') }}</strong></p>
+                        <p class="mb-2">{{ _('Each probe task has its own trigger URL; it is shown at the bottom of the probe edit dialog with a copy button. The URL uses the immutable probe id, so renaming the task never changes it.') }}</p>
+                        <div class="bg-body-tertiary p-2 rounded font-monospace small mb-2 text-break border">POST {{ webhook_base_url }}/probe?probe_id=&lt;probe_id&gt;&amp;token=&lt;probe_token&gt;</div>
+                        <p class="mb-1">{{ _('The call is dispatched immediately on the probe queue; the normal verdict runs and a failed probe raises the bound duty-group alarm (webhook + calls), exactly like the cron schedule.') }}</p>
+                        <p class="mb-2"><span class="badge bg-info-subtle text-info border border-info-subtle me-1">{{ _('Rename safe') }}</span>{{ _('probe_id is permanent: renaming the task keeps the URL valid. Regenerating the token only invalidates the token part - replace ?token= in the monitoring tool and keep the same probe_id. ?probe=<name> is still accepted for convenience but is not required.') }}</p>
+                        <p class="mb-1">{{ _('Successful response:') }}</p>
+                        <div class="bg-body-tertiary p-2 rounded font-monospace small mb-2 text-break border">{"status": 200, "probe": "&lt;probe_name&gt;", "phone": "&lt;number&gt;", "task_id": "&lt;celery-id&gt;"}</div>
+                        <p class="mb-1"><strong>{{ _('Zabbix action example:') }}</strong></p>
+                        <div class="bg-body-tertiary p-2 rounded font-monospace small mb-2 text-break border">
+                            URL: POST {{ webhook_base_url }}/probe?probe_id=&lt;probe_id&gt;&amp;token=&lt;probe_token&gt;<br>
+                            Method: POST &nbsp; Body: {}
+                        </div>
+                        <p class="mb-1"><strong>{{ _('curl example:') }}</strong></p>
+                        <div class="bg-body-tertiary p-2 rounded font-monospace small mb-3 text-break border">
+                            curl -X POST "{{ webhook_base_url }}/probe?probe_id=&lt;probe_id&gt;&amp;token=&lt;probe_token&gt;"
+                        </div>
+
+                        <p class="mb-1"><strong>{{ _('Authentication:') }}</strong></p>
+                        <p class="mb-3">{{ _('Pass the service token or a duty-group token as ?token=T, Header X-Webhook-Token: T, Header X-API-Key: T, or Authorization: Bearer T.') }}
+                        {% if webhook_auth_token %}<br><code class="user-select-all">token={{ webhook_auth_token }}</code>{% endif %}</p>
+
+                        <p class="mb-1"><strong>{{ _('Accepted payloads:') }}</strong></p>
+                        <ul class="mb-3 ps-3">
+                            <li>{{ _('Alertmanager: {"alerts":[{"status":"firing","annotations":{"description":"..."}}]} - only firing descriptions are dispatched.') }}</li>
+                            <li>{{ _('Zabbix / generic JSON: {"subject":"PROBLEM: ...","message":"{ALERT.MESSAGE}"} - message wins, then subject, body, content, description, title.') }}</li>
+                            <li>{{ _('Zabbix script media: raw text body (Content-Type: text/plain) - the whole body becomes the alert message.') }}</li>
+                            <li>{{ _('Zabbix form media: message=...&subject=... (application/x-www-form-urlencoded).') }}</li>
+                        </ul>
+
+                        <p class="mb-1"><strong>{{ _('Zabbix media type example:') }}</strong></p>
+                        <div class="bg-body-tertiary p-2 rounded font-monospace small mb-3 text-break border">
+                            URL: POST {{ webhook_base_url }}/call_only?group=&lt;group&gt;&amp;token=&lt;token&gt;<br>
+                            Headers: Content-Type: application/json<br>
+                            Body: {"subject": "{ALERT.SUBJECT}", "message": "{ALERT.MESSAGE}"}
+                        </div>
+
+                        <p class="mb-1"><strong>{{ _('curl example:') }}</strong></p>
+                        <div class="bg-body-tertiary p-2 rounded font-monospace small mb-3 text-break border">
+                            curl -X POST "{{ webhook_base_url }}/call_and_sms?group=&lt;group&gt;&amp;token=&lt;token&gt;" \<br>
+                            &nbsp;&nbsp;-H "Content-Type: application/json" \<br>
+                            &nbsp;&nbsp;-d '{"message":"disk full on srv-01"}'
+                        </div>
+
+                        <p class="mb-0">{{ _('Incoming alerts resolve the duty roster, synthesize speech and place the calls; resolved alerts are never dispatched. Use the Test Webhook button on a duty group to verify connectivity.') }}</p>
                     </div>
                 </div>
             </div>
@@ -762,7 +830,7 @@
             // Determine active section based on URL pathname
             const path = window.location.pathname.toLowerCase();
             const sectionTitles = {
-                'home': "{{ _('Prometheus & Webhook Triggering') }}",
+                'webhook': "{{ _('Webhook Integration Guide') }}",
                 'address_book': "{{ _('Address Book & On-Call') }}",
                 'schedule_call': "{{ _('Scheduled Calls & Speech') }}",
                 'calls': "{{ _('Managed Calls & DTMF') }}",
@@ -770,8 +838,9 @@
                 'ws_events': "{{ _('PBX Events & Telephony Stream') }}"
             };
 
-            let activeKey = 'home';
+            let activeKey = 'webhook';
             if (path.includes('address_book')) activeKey = 'address_book';
+            else if (path.includes('prober')) activeKey = 'webhook';
             else if (path.includes('schedule_call')) activeKey = 'schedule_call';
             else if (path.includes('calls')) activeKey = 'calls';
             else if (path.includes('sms')) activeKey = 'sms';

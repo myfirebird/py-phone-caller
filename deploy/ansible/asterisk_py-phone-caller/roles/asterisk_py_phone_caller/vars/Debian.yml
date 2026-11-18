@@ -7,6 +7,8 @@ asterisk_module_dir: /usr/lib/asterisk/modules
 asterisk_data_dir: /var/lib/asterisk
 asterisk_cache_dir: /var/cache/asterisk
 asterisk_sounds_dir: /usr/share/asterisk/sounds/en
+# ARI channel/bridge recordings (probe call recording).
+asterisk_recording_dir: /var/spool/asterisk/recording
 
 asterisk_packages:
   - asterisk

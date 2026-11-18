@@ -19,6 +19,7 @@ from caller_prometheus_webhook.clients import AsteriskCallClient, CallerSmsClien
 from caller_prometheus_webhook.coalescing import AlertCoalescer
 from caller_prometheus_webhook.schemas import (
     NotificationMode,
+    extract_alert_messages,
     PrometheusAlert,
     WebhookPayload,
 )
@@ -143,72 +144,85 @@ class AlertNotificationService:
         self.sms_wait_seconds = sms_wait_seconds
         self.coalescer = coalescer or AlertCoalescer()
 
-        self._action_dispatch: dict[str, Callable[[str, str], Awaitable[None]]] = {
+        self._action_dispatch: dict[str, Callable[..., Awaitable[None]]] = {
             NotificationMode.CALL_ONLY.value: self.do_call_only,
             NotificationMode.SMS_ONLY.value: self.do_sms_only,
             NotificationMode.SMS_BEFORE_CALL.value: self.do_sms_before_call,
             NotificationMode.CALL_AND_SMS.value: self.do_call_and_sms,
         }
 
-    async def do_call_only(self, receiver: str, message: str) -> None:
+    async def do_call_only(self, receiver: str, message: str, lang: str | None = None) -> None:
         """
         Dispatches a voice phone call.
 
         Args:
             receiver: Phone destination.
             message: Text-to-speech message content.
+            lang: Optional TTS voice language code passed to the caller service.
         """
         results = await asyncio.gather(
-            self.call_client.place_call(receiver, message),
+            self.call_client.place_call(receiver, message, lang=lang),
             return_exceptions=True,
         )
         if any(isinstance(r, Exception) or r is False for r in results):
             logging.info(f"Unable to start a call for '{receiver}' with message '{message}'")
 
-    async def do_sms_only(self, receiver: str, message: str) -> None:
+    async def do_sms_only(self, receiver: str, message: str, lang: str | None = None) -> None:
         """
         Dispatches an SMS message.
 
         Args:
             receiver: Phone destination.
             message: SMS body text.
+            lang: Accepted for a uniform handler signature; SMS ignores it.
         """
         await self.sms_client.send_sms(receiver, message)
 
-    async def _schedule_sms_before_call(self, receiver: str, message: str) -> None:
+    async def _schedule_sms_before_call(
+        self, receiver: str, message: str, lang: str | None = None
+    ) -> None:
         """
         Internal worker that sends SMS, waits for interval, then triggers call.
 
         Args:
             receiver: Phone destination.
             message: Notification content.
+            lang: Optional TTS voice language code for the phone call.
         """
         await self.do_sms_only(receiver, message)
         await asyncio.sleep(self.sms_wait_seconds)
-        await self.do_call_only(receiver, message)
+        await self.do_call_only(receiver, message, lang=lang)
 
-    async def do_sms_before_call(self, receiver: str, message: str) -> None:
+    async def do_sms_before_call(
+        self, receiver: str, message: str, lang: str | None = None
+    ) -> None:
         """
         Schedules asynchronous background task to send SMS followed by phone call.
 
         Args:
             receiver: Phone destination.
             message: Notification content.
+            lang: Optional TTS voice language code for the phone call.
         """
-        asyncio.create_task(self._schedule_sms_before_call(receiver, message))
+        asyncio.create_task(self._schedule_sms_before_call(receiver, message, lang=lang))
 
-    async def do_call_and_sms(self, receiver: str, message: str) -> None:
+    async def do_call_and_sms(
+        self, receiver: str, message: str, lang: str | None = None
+    ) -> None:
         """
         Dispatches both SMS and phone call.
 
         Args:
             receiver: Phone destination.
             message: Notification content.
+            lang: Optional TTS voice language code for the phone call.
         """
         await self.do_sms_only(receiver, message)
-        await self.do_call_only(receiver, message)
+        await self.do_call_only(receiver, message, lang=lang)
 
-    async def execute_action(self, receiver: str, message: str, action_mode: str) -> None:
+    async def execute_action(
+        self, receiver: str, message: str, action_mode: str, lang: str | None = None
+    ) -> None:
         """
         Executes the configured notification action using dictionary strategy dispatch.
 
@@ -216,15 +230,17 @@ class AlertNotificationService:
             receiver: Phone number destination.
             message: Alert message.
             action_mode: Mode key ('call_only', 'sms_only', etc.).
+            lang: Optional TTS voice language code for the phone call.
         """
         handler = self._action_dispatch.get(action_mode, self.do_call_only)
-        await handler(receiver, message)
+        await handler(receiver, message, lang=lang)
 
     async def process_queue(
         self,
         message: str,
         receivers: Sequence[str],
         action_mode: str,
+        lang: str | None = None,
     ) -> None:
         """
         Distributes notifications across multiple receivers using an asyncio.Queue.
@@ -233,6 +249,7 @@ class AlertNotificationService:
             message: Voice/SMS alert content.
             receivers: List of destination numbers.
             action_mode: Action mode string.
+            lang: Optional TTS voice language code for the phone calls.
         """
         queue: asyncio.Queue[tuple[str, str]] = asyncio.Queue()
 
@@ -243,7 +260,7 @@ class AlertNotificationService:
                 logging.info(
                     f"Call/Message '{msg}' for '{rcv}' through the endpoint '{action_mode}'"
                 )
-                await self.execute_action(rcv, msg, action_mode)
+                await self.execute_action(rcv, msg, action_mode, lang=lang)
                 queue.task_done()
 
         producer_tasks = [
@@ -262,6 +279,7 @@ class AlertNotificationService:
         action_mode: str,
         receivers: Sequence[str],
         dedup_window: int = 180,
+        lang: str | None = None,
     ) -> bool:
         """
         Processes an incoming webhook payload from Alertmanager.
@@ -275,12 +293,12 @@ class AlertNotificationService:
             action_mode: Notification action mode.
             receivers: Configured recipient numbers.
             dedup_window: Sliding deduplication window in seconds.
+            lang: Optional TTS voice language code for the phone calls.
 
         Returns:
             True if any non-duplicate alerts were queued, False otherwise.
         """
-        webhook = WebhookPayload.from_dict(payload_data)
-        firing_messages = webhook.firing_descriptions
+        firing_messages = extract_alert_messages(payload_data)
 
         if not firing_messages:
             return False
@@ -289,9 +307,9 @@ class AlertNotificationService:
             settings.get("caller_prometheus_webhook", {}).get("coalesce_alerts", False)
             or settings.get("caller_prometheus_webhook", {}).get("coalescing_enabled", False)
         )
-        firing_messages = (
-            webhook.all_firing_descriptions if coalesce_enabled else webhook.firing_descriptions
-        )
+        if coalesce_enabled:
+            webhook = WebhookPayload.from_dict(payload_data)
+            firing_messages = webhook.all_firing_descriptions or firing_messages
 
         unique_firing: list[str] = []
         for msg in firing_messages:
@@ -309,11 +327,11 @@ class AlertNotificationService:
         if coalesce_enabled and len(unique_firing) > 1:
             incident = self.coalescer.coalesce_descriptions(unique_firing)
             msg_to_send = incident.detailed_sms if action_mode == NotificationMode.SMS_ONLY.value else incident.summary_message
-            await self.process_queue(msg_to_send, receivers, action_mode)
+            await self.process_queue(msg_to_send, receivers, action_mode, lang=lang)
             dispatched = True
         else:
             for msg in unique_firing:
-                await self.process_queue(msg, receivers, action_mode)
+                await self.process_queue(msg, receivers, action_mode, lang=lang)
                 dispatched = True
 
         return dispatched

@@ -607,6 +607,7 @@ msgstr "关于"
 #: src/py_phone_caller_ui/sms/templates/sms/sms.html:208
 #: src/py_phone_caller_ui/users/templates/users/users.html:127
 #: src/py_phone_caller_ui/ws_events/templates/ws_events/ws_events.html:110
+#: src/py_phone_caller_ui/prober/templates/prober/records.html:158
 msgid "Items per page:"
 msgstr "每页条目数:"
 
@@ -1553,3 +1554,412 @@ msgstr "未找到 WebSocket 事件"
 #~ msgid "Switch Language: Select from 8 supported locales."
 #~ msgstr "切换语言：从 8 种受支持的语言中选择。"
 
+
+msgid "Prober"
+msgstr "号码拨测"
+
+msgid "Prober Console"
+msgstr "拨测与告警控制台"
+
+msgid "Reload"
+msgstr "刷新"
+
+msgid "Add Duty Group"
+msgstr "新建值班组"
+
+msgid "Add Probe"
+msgstr "新建拨测项"
+
+msgid "Duty Groups"
+msgstr "值班组"
+
+msgid "Members"
+msgstr "值班成员"
+
+msgid "Called sequentially until someone presses the ACK digit"
+msgstr "发生告警时按顺序外呼，直到接听人按键ACK确认"
+
+msgid "Escalation Timeout"
+msgstr "升级等待时长"
+
+msgid "Escalation Timeout (s)"
+msgstr "升级等待时长 (秒)"
+
+msgid "Group"
+msgstr "值班组"
+
+msgid "Group Name"
+msgstr "值班组名称"
+
+msgid "Webhook"
+msgstr "告警 Webhook"
+
+msgid "Webhook URL"
+msgstr "Webhook 推送地址"
+
+msgid "Test webhook delivery"
+msgstr "测试 Webhook 推送"
+
+msgid "Testing webhook"
+msgstr "正在测试 Webhook 连接"
+
+msgid "Receives the JSON alarm summary before voice escalation starts"
+msgstr "拨测异常时优先接收 JSON 格式的故障告警摘要"
+
+msgid "Members (escalation order)"
+msgstr "值班成员清单 (按外呼升级顺序排序)"
+
+msgid "Seconds to wait for the ACK digit before escalating to the next member"
+msgstr "等待成员按键确认接警的时长，超时或未接通将自动升级外呼下一位"
+
+msgid "Add Member"
+msgstr "添加成员"
+
+msgid "Save Group"
+msgstr "保存值班组"
+
+msgid "Edit Duty Group"
+msgstr "编辑值班组"
+
+msgid "Delete duty group"
+msgstr "确认删除值班组"
+
+msgid "No duty groups configured"
+msgstr "暂无配置的电话值班组"
+
+
+msgid "Probe Name"
+msgstr "任务名称"
+
+msgid "Type"
+msgstr "业务类型"
+
+msgid "Schedule"
+msgstr "调度计划 (Cron)"
+
+msgid "Cron Schedule"
+msgstr "Cron 调度计划"
+
+msgid "5-field cron expression, evaluated in UTC (e.g. 0 9 * * * for 09:00 daily)"
+msgstr "5 位标准 Cron 表达式 (UTC时间，例如 0 9 * * * 代表每日 09:00)"
+
+msgid "Duty Group"
+msgstr "绑定值班组"
+
+msgid "Timeout"
+msgstr "超时时间"
+
+msgid "Timeout (s)"
+msgstr "单次超时时长 (秒)"
+
+msgid "DTMF"
+msgstr "预设按键"
+
+msgid "DTMF Digits"
+msgstr "DTMF 模拟按键"
+
+msgid "Sent 2 seconds after answer (call center probes). Leave empty to skip."
+msgstr "接通 2 秒后自动发送的按键序列（用于 IVR 客服验证，留空则不发送）"
+
+msgid "Call Center"
+msgstr "呼叫中心"
+
+msgid "Direct"
+msgstr "普通线路"
+
+msgid "Call Center: requires answer + Stasis + media + DTMF liveness. Direct: ringing or answer is healthy."
+msgstr "呼叫中心：需接通、进Stasis、持续通话>3秒、媒体双通及按键存活。普通线路：振铃或接通即为正常。"
+
+msgid "Run this probe now"
+msgstr "立即执行拨测"
+
+msgid "Start Probe"
+msgstr "启动拨测"
+
+msgid "Stop Probe"
+msgstr "停止拨测"
+
+msgid "Running"
+msgstr "运行中"
+
+msgid "Stopped"
+msgstr "已停止"
+
+msgid "Scheduled probing is running"
+msgstr "定时拨测运行中，将按 Cron 计划自动执行"
+
+msgid "Scheduled probing is stopped"
+msgstr "定时拨测已停止，仅可通过手动或 Webhook 触发"
+
+msgid "Save Probe"
+msgstr "保存拨测项"
+
+msgid "Edit Probe"
+msgstr "编辑拨测项"
+
+msgid "Delete probe"
+msgstr "确认删除拨测项"
+
+msgid "Dispatching probe"
+msgstr "正在投递拨测任务"
+
+msgid "No probe targets configured"
+msgstr "暂无配置的拨测号码"
+
+msgid "Webhook Integration Guide"
+msgstr "Webhook 接口接入指南"
+
+msgid "Copy URL"
+msgstr "复制完整地址"
+
+msgid "Copy"
+msgstr "复制"
+
+msgid "Copied!"
+msgstr "已复制!"
+
+msgid "Security Authentication"
+msgstr "安全认证方式"
+
+msgid "Deployed Environment Webhook Endpoints"
+msgstr "当前部署环境 Webhook 接口清单"
+
+msgid "Webhook Security Token"
+msgstr "Webhook 安全认证 Token"
+
+msgid "Authentication"
+msgstr "安全认证"
+
+msgid "Simultaneous voice call and SMS alert"
+msgstr "同时发起电话外呼与短信通知"
+
+msgid "Voice call alert only"
+msgstr "仅发起电话外呼通知"
+
+msgid "SMS text alert only"
+msgstr "仅发送短信告警通知"
+
+msgid "SMS text first, then voice call"
+msgstr "先发送短信，延时未确认再电话外呼"
+
+msgid "Voice Call"
+msgstr "电话"
+
+msgid "SMS Text"
+msgstr "短信"
+
+msgid "Simultaneous (Call + SMS)"
+msgstr "同时 (电话+短信)"
+
+msgid "SMS Before Call"
+msgstr "先短信后电话"
+
+msgid "Notification Type"
+msgstr "通知类型"
+
+msgid "Security Token"
+msgstr "安全 Token"
+
+msgid "Generate Token"
+msgstr "随机生成 Token"
+
+msgid "Regenerate Token"
+msgstr "重新生成 Token"
+
+msgid "Duty Group Webhook URL"
+msgstr "值班组专属 Webhook 地址"
+
+msgid "Token regenerated"
+msgstr "Token 已重新生成并保存"
+
+msgid "Manage on-call rosters, notification types, and alert webhooks"
+msgstr "管理值班成员、通知类型与专属告警 Webhook"
+
+msgid "Configure probed numbers, cron schedules, and health metrics"
+msgstr "配置被测号码、Cron计划与多维度健康检测"
+
+
+msgid "Manage on-call duty rosters and scheduled number probing"
+msgstr "管理值班组、告警推送与号码定时拨测"
+
+msgid "Auto Generated"
+msgstr "自动动态生成"
+
+msgid "Webhook Push URL"
+msgstr "Webhook 推送地址"
+
+msgid "Execution Records"
+msgstr "执行记录"
+
+msgid "Target"
+msgstr "目标"
+
+msgid "Source"
+msgstr "来源"
+
+msgid "Verdict"
+msgstr "判定结果"
+
+msgid "Failure Code"
+msgstr "故障码"
+
+msgid "SIP Cause"
+msgstr "SIP 挂断码"
+
+msgid "Media / DTMF"
+msgstr "媒体 / 按键"
+
+msgid "Manual"
+msgstr "手动触发"
+
+msgid "Scheduled"
+msgstr "计划调度"
+
+msgid "No execution records yet"
+msgstr "暂无执行记录"
+
+msgid "Probe dispatched, awaiting execution..."
+msgstr "拨测任务已投递，正在执行中..."
+
+msgid "Failed to dispatch probe"
+msgstr "拨测任务投递失败"
+
+msgid "Media frames"
+msgstr "媒体帧数"
+
+msgid "DTMF digits sent"
+msgstr "已发送预设按键"
+
+msgid "Talk Limit (s)"
+msgstr "通话时长上限 (秒)"
+
+msgid "Hang up automatically once the call has been connected for this many seconds"
+msgstr "接通达到该秒数后自动挂机"
+
+msgid "Timeout / Talk"
+msgstr "总超时 / 通话上限"
+
+msgid "Duty & Prober"
+msgstr "值班与拨测"
+
+msgid "Probe Records"
+msgstr "拨测记录"
+
+msgid "Alarm Calls"
+msgstr "告警呼叫"
+
+msgid "Acknowledged by"
+msgstr "接警人"
+
+msgid "Talk limit"
+msgstr "已达通话上限"
+
+msgid "Hung up by the probe at the talk limit"
+msgstr "接通达到上限后由拨测自动挂机"
+
+msgid "Probe dispatched. Open the probe records?"
+msgstr "拨测已下发，是否打开拨测记录？"
+
+
+
+
+
+
+msgid "Probe Tasks"
+msgstr "拨测任务"
+
+
+
+msgid "Search probe records..."
+msgstr "搜索拨测记录..."
+
+msgid "No probe records found"
+msgstr "未找到匹配的拨测记录"
+
+#: src/py_phone_caller_ui/prober/templates/prober/records.html:18
+msgid "Refresh"
+msgstr "刷新"
+
+msgid "Duty Group Endpoints:"
+msgstr "值班组接口地址："
+
+msgid "Pick the endpoint matching the channels you want; the URL suffix selects the notification mode."
+msgstr "按需要的通知渠道选择接口，URL 后缀决定通知方式。"
+
+msgid "Target a specific duty group:"
+msgstr "指定值班组："
+
+msgid "The group name and token are shown on the Duty & Prober page; ?group= also lets the receiver use that roster instead of the default receivers."
+msgstr "值班组名称与 token 在“值班与拨测”页面可见；带 ?group= 时接收端会使用该组的值班人员而不是默认接收人。"
+
+msgid "Authentication:"
+msgstr "鉴权方式："
+
+msgid "Pass the service token or a duty-group token as ?token=T, Header X-Webhook-Token: T, Header X-API-Key: T, or Authorization: Bearer T."
+msgstr "服务 token 或值班组 token 可通过 ?token=T、请求头 X-Webhook-Token: T、X-API-Key: T 或 Authorization: Bearer T 传入。"
+
+msgid "Accepted payloads:"
+msgstr "支持的请求体："
+
+msgid "Alertmanager: {"alerts":[{"status":"firing","annotations":{"description":"..."}}]} - only firing descriptions are dispatched."
+msgstr "Alertmanager：{"alerts":[{"status":"firing","annotations":{"description":"..."}}]}，仅 firing 状态的描述会被外呼/短信。"
+
+msgid "Zabbix / generic JSON: {"subject":"PROBLEM: ...","message":"{ALERT.MESSAGE}"} - message wins, then subject, body, content, description, title."
+msgstr "Zabbix / 通用 JSON：{"subject":"PROBLEM: ...","message":"{ALERT.MESSAGE}"}，优先取 message，其次 subject、body、content、description、title。"
+
+msgid "Zabbix script media: raw text body (Content-Type: text/plain) - the whole body becomes the alert message."
+msgstr "Zabbix 脚本媒体：纯文本请求体（Content-Type: text/plain），整段正文即为告警内容。"
+
+msgid "Zabbix form media: message=...&subject=... (application/x-www-form-urlencoded)."
+msgstr "Zabbix 表单媒体：message=...&subject=...（application/x-www-form-urlencoded）。"
+
+msgid "Zabbix media type example:"
+msgstr "Zabbix 媒体类型示例："
+
+msgid "curl example:"
+msgstr "curl 示例："
+
+msgid "Incoming alerts resolve the duty roster, synthesize speech and place the calls; resolved alerts are never dispatched. Use the Test Webhook button on a duty group to verify connectivity."
+msgstr "收到的告警会解析值班人员、合成语音并外呼；已恢复（resolved）的告警不会外呼。可用值班组上的“测试 Webhook”按钮验证连通性。"
+
+msgid "Probe Trigger Webhook"
+msgstr "拨测触发 Webhook"
+
+msgid "Regenerate token"
+msgstr "重新生成 token"
+
+msgid "POST this URL from Zabbix (or any monitoring tool) to run the probe immediately; failures raise the duty-group alarm exactly like a scheduled run. Authentication uses the token in the URL."
+msgstr "由 Zabbix（或任意监控系统）向该地址发送 POST 即可立即执行本拨测；失败时与定时拨测一样触发所属值班组告警。鉴权使用 URL 中的 token。"
+
+msgid "Trigger a probe on demand (Zabbix):"
+msgstr "按需触发拨测（Zabbix）："
+
+msgid "The call is dispatched immediately on the probe queue; the normal verdict runs and a failed probe raises the bound duty-group alarm (webhook + calls), exactly like the cron schedule."
+msgstr "调用后立即投递到拨测队列执行；判定流程不变，失败时与定时任务完全一致地触发所属值班组告警（Webhook + 外呼）。"
+
+msgid "Successful response:"
+msgstr "成功响应："
+
+msgid "Zabbix action example:"
+msgstr "Zabbix 动作示例："
+
+msgid "Rename safe"
+msgstr "重命名安全"
+
+msgid "Each probe task has its own trigger URL; it is shown at the bottom of the probe edit dialog with a copy button. The URL uses the immutable probe id, so renaming the task never changes it."
+msgstr "每个拨测任务都有独立的触发地址，显示在拨测编辑弹窗底部并支持一键复制。地址使用不可变的拨测 ID，因此重命名任务不会改变它。"
+
+msgid "probe_id is permanent: renaming the task keeps the URL valid. Regenerating the token only invalidates the token part - replace ?token= in the monitoring tool and keep the same probe_id. ?probe=<name> is still accepted for convenience but is not required."
+msgstr "probe_id 永久不变：重命名任务不影响已有地址；重新生成 token 只会让 token 部分失效——在监控系统中替换 ?token= 即可，probe_id 保持不变。?probe=<名称> 仍兼容但非必需。"
+
+msgid "The group id and token are shown on the Duty & Prober page; group_id is permanent, so renaming the group never changes the URL. ?group=<name> is still accepted for compatibility."
+msgstr "值班组 ID 与 token 在“值班与拨测”页面可见；group_id 永久不变，重命名值班组不会改变地址。?group=<名称> 仍兼容。"
+
+msgid "Pick the endpoint matching the channels you want; the URL suffix selects the notification mode. /call_only and /call are equivalent, as are /sms_only and /sms."
+msgstr "按需要的通知渠道选择接口，URL 后缀决定通知方式。/call_only 与 /call 等价，/sms_only 与 /sms 等价。"
+
+msgid "Recording"
+msgstr "录音"
+
+msgid "Play"
+msgstr "播放"

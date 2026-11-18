@@ -23,6 +23,17 @@
     group: "{{ asterisk_group }}"
     mode: '0755'
 
+# ARI channel/bridge recordings (probe call recording) are written here; the
+# directory is not created by the packages and recording fails with HTTP 500
+# ("Error opening directory") until it exists.
+- name: Create Asterisk recording spool directory
+  ansible.builtin.file:
+    path: "{{ asterisk_recording_dir }}"
+    state: directory
+    owner: "{{ asterisk_user }}"
+    group: "{{ asterisk_group }}"
+    mode: '0750'
+
 - name: Check for standard sounds
   ansible.builtin.stat:
     path: "{{ asterisk_data_dir }}/sounds/en"
@@ -143,14 +154,18 @@
   notify: restart asterisk
 
 # --- 7. SELinux Configuration ---
+# Asterisk plays generated TTS wavs over HTTP (res_http_media_cache). The
+# service ports must be labelled http_port_t, otherwise asterisk_t is denied
+# `name_connect` and every announcement fails silently as a no-audio call.
+# `port -m` is used because the ports may already carry another type
+# (us_cli_port_t), in which case `port -a` would refuse to add them.
 - name: Allow Asterisk to connect to custom HTTP ports (SELinux)
-  vars:
-    ansible_python_interpreter: /usr/bin/python3
-  community.general.seport:
-    ports: "{{ item }}"
-    proto: tcp
-    setype: http_port_t
-    state: present
+  ansible.builtin.shell:
+    cmd: >-
+      semanage port -m -t http_port_t -p tcp {{ item }} ||
+      semanage port -a -t http_port_t -p tcp {{ item }}
+  register: semanage_http_ports
+  changed_when: semanage_http_ports.rc == 0
   loop:
     - 8082
     - 8083

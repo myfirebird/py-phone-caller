@@ -141,3 +141,6 @@ credentials/
 /skills/system/run-workflow/SKILL.md
 /deploy/ansible/.collections
 /deploy/ansible/tests
+
+# Release bundles (source zips / patches generated per build)
+/release/

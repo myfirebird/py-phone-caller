@@ -24,6 +24,12 @@ asterisk_call_port = "8081"
 asterisk_call_app_route_place_call = "place_call"
 asterisk_call_app_route_call_to_queue = "call_to_queue"
 asterisk_call_app_route_play = "play"
+# Render the announcement TTS as soon as the call is dialled, so the audio is
+# ready when the callee answers (Kokoro loads its model per request, 10-15s).
+prewarm_tts = true
+# Client budget for the pre-warm request (the endpoint replies after the wav
+# exists, ~15s with Kokoro on this host).
+prewarm_tts_timeout = 120
 seconds_to_forget = 180
 client_timeout_total = 5 # For 'ClientTimeout(total=5)'
 
@@ -41,9 +47,14 @@ call_register_scheduled_call_app_route = "scheduled_call"
 asterisk_stasis_app = "py-phone-caller"
 
 [asterisk_recaller]
-times_to_dial = 3
+# Each number is dialled exactly once: the registration row starts at
+# dialed_times=1 and the retry query selects dialed_times < times_to_dial,
+# so 1 disables all primary re-dials (3 meant two extra attempts).
+times_to_dial = 1
 call_backup_callee_after_seconds = 60
-call_backup_callee_max_times = 3
+# 0 disables the backup escalation call entirely (the on-call address book can
+# hand back the same person, which would break "one call per number").
+call_backup_callee_max_times = 0
 
 [generate_audio]
 generate_audio_http_scheme = "http"
@@ -99,11 +110,17 @@ prometheus_webhook_app_route_sms_before_call = "sms_before_call"
 prometheus_webhook_app_route_call_and_sms = "call_and_sms"
 prometheus_webhook_receivers = ["+39123456789"]
 require_auth = false
+webhook_auth_token = "py-phone-caller-webhook-secret-token"
 # Alert Storm Coalescing & Incident Batching (v1.2.0)
 coalescing_enabled = false
 coalescing_window_seconds = 10
 coalescing_max_samples = 3
 use_redis_dedup = false
+# TTS voice language for webhook-triggered calls (call_only/call/call_and_sms/
+# sms_before_call). Empty keeps the generate_audio default voice. The duty
+# group's own `lang` and an explicit ?lang= query parameter both take
+# precedence over this value. Example: "z" (Kokoro Mandarin).
+webhook_tts_lang = ""
 
 # -------------------------------------------------------------------------
 # UPDATED SMS CONFIGURATION FOR HIGH AVAILABILITY (HA)
@@ -150,7 +167,7 @@ scheduled_calls_http_scheme = "http"
 scheduled_calls_host = "127.0.0.1"
 scheduled_calls_port = "8086"
 scheduled_call_app_route = "schedule_call"
-local_timezone = "Europe/Rome"
+local_timezone = "Asia/Shanghai"
 
 [queue]
 queue_scheme = "redis"
@@ -227,3 +244,34 @@ roles_claim = "roles"
 admin_role = "alert-admin"
 operator_role = "alert-operator"
 viewer_role = "alert-viewer"
+
+[caller_prober]
+probe_stasis_app = "py-phone-caller-probe"
+probe_media_app = "py-phone-caller-probe-media"
+alarm_stasis_app = "py-phone-caller-probe-alarm"
+probe_queue = "probe_queue"
+probe_scan_interval = 60.0
+probe_media_format = "ulaw"
+probe_scan_lock_key = "lock:prober_scan"
+probe_scan_lock_ttl = 45
+### Talk time allowed after answer; the probe hangs the call up itself.
+### IVR queues and hotlines never hang up, so this bounds every probe call.
+### Per-probe override: probes[].max_call_seconds in probe_config.yml.
+probe_max_call_seconds = 20.0
+### Every probe call is recorded (both directions) for later listening.
+probe_recording_enabled = true
+probe_recording_format = "wav"
+### Stored recordings older than this are purged on the next probe run.
+probe_recording_retention_days = 7
+webhook_timeout_total = 10.0
+ari_http_timeout_total = 10.0
+ari_ws_close_timeout = 5.0
+alarm_ack_digit = "1"
+### Static local alert played when generate_audio cannot synthesize the
+### announcement. Shipped by the asterisk role (files/sounds/prober-alarm.wav)
+### so a TTS outage can never produce a silent alarm call.
+alarm_fallback_media = "sound:prober-alarm"
+### Language passed to generate_audio for the spoken duty alarm ("z" = Chinese).
+alarm_tts_lang = "z"
+### Neural TTS synthesis is synchronous: keep a wide budget for the request.
+alarm_tts_timeout_total = 90.0

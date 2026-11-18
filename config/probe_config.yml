@@ -1,0 +1,63 @@
+# Probe & duty-group alarm routing configuration for caller_prober.
+#
+# Path resolution: CALLER_PROBE_CONFIG env var -> <config dir>/probe_config.yml
+# -> <cwd>/config/probe_config.yml (this file).
+
+duty_groups:
+  network_ops:
+    # Roster called sequentially until someone presses the ACK digit (1).
+    members:
+      - name: "张三"
+        phone: "13800000001"
+      - name: "李四"
+        phone: "13800000002"
+    # Seconds to wait for ACK before escalating to the next member.
+    escalation_timeout: 60
+    webhook_url: "https://hooks.example.com/network-ops"
+    notification_type: "call_and_sms"
+    token: "tok_netops_sec99a"
+    # TTS voice language for webhook calls routed to this group (empty = the
+    # caller_prometheus_webhook.webhook_tts_lang setting, then the
+    # generate_audio default). "z" is the Kokoro Mandarin voice.
+    lang: ""
+
+  business_ops:
+    members:
+      - name: "王五"
+        phone: "13900000001"
+      - name: "赵六"
+        phone: "13900000002"
+    escalation_timeout: 45
+    webhook_url: "https://hooks.example.com/business-ops"
+    notification_type: "call"
+    token: "tok_bizops_k72bx8"
+    lang: ""
+
+probes:
+  # enabled: true (default) runs the probe on its cron schedule; false stops
+  # the schedule only - manual runs and the trigger webhook keep working.
+  # Callcenter hotline: answered + Stasis + duration + media + DTMF liveness.
+  - phone: "95100"
+    name: "客服中心主热线"
+    type: "callcenter"
+    schedule: "0 9 * * *"        # every day 09:00 (worker TZ = UTC)
+    timeout: 60
+    dtmf_digits: "1"             # pressed 2s after answer to simulate a customer
+    duty_group: "business_ops"
+    enabled: true
+
+  - phone: "95101"
+    name: "客服中心备用热线"
+    type: "callcenter"
+    schedule: "30 9 * * *"
+    timeout: 60
+    dtmf_digits: "12"
+    duty_group: "business_ops"
+
+  # Plain trunk numbers: ringing or answered is healthy.
+  - phone: "057188880001"
+    name: "办公室直线"
+    type: "direct"
+    schedule: "0 10 * * *"
+    timeout: 30
+    duty_group: "network_ops"

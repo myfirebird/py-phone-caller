@@ -39,25 +39,30 @@ class AsteriskCallClient:
         """Full URL for the call placement endpoint."""
         return f"{self.base_url}/{self.route}"
 
-    async def place_call(self, phone: str, message: str) -> bool:
+    async def place_call(self, phone: str, message: str, lang: str | None = None) -> bool:
         """
         Sends an HTTP POST to place an outbound phone call.
 
         Args:
             phone: Target phone number.
             message: Voice prompt message.
+            lang: Optional TTS voice language code; omitted when empty so the
+                generate_audio service keeps its own default voice.
 
         Returns:
             True if the call was accepted, False otherwise.
         """
         formatted_phone = phone.replace("+", "00") if isinstance(phone, str) else str(phone)
+        params = {"phone": formatted_phone, "message": message}
+        if lang:
+            params["lang"] = str(lang).strip()
         try:
             async with ClientSession(
                 timeout=ClientTimeout(total=self.timeout_total)
             ) as session:
                 async with session.post(
                     url=self.target_url,
-                    params={"phone": formatted_phone, "message": message},
+                    params=params,
                     data=None,
                     headers=inject_trace_context(),
                 ) as resp:

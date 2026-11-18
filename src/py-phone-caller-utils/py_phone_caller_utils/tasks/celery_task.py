@@ -39,6 +39,7 @@ app.conf.task_queues = [
     Queue("telephony.p2", exchange=telephony_exchange, routing_key="telephony.p2", queue_arguments={"x-max-priority": 9}),
     Queue("telephony.dlq", exchange=telephony_exchange, routing_key="telephony.dlq"),
     Queue("celery", exchange=telephony_exchange, routing_key="celery", queue_arguments={"x-max-priority": 9}),
+    Queue("probe_queue", exchange=telephony_exchange, routing_key="probe_queue", queue_arguments={"x-max-priority": 9}),
 ]
 
 app.conf.task_default_queue = "telephony.p2"
@@ -48,7 +49,11 @@ app.conf.task_default_routing_key = "telephony.p2"
 app.conf.task_routes = {
     "py_phone_caller_utils.tasks.celery_task.do_this_call": {"queue": "telephony.p2"},
     "py_phone_caller_utils.tasks.celery_task.dispatch_emergency_call": {"queue": "telephony.p0"},
+    "caller_prober.tasks.probe_tasks.run_probe": {"queue": "probe_queue"},
+    "caller_prober.tasks.probe_tasks.dispatch_duty_alarm": {"queue": "probe_queue"},
 }
+
+app.conf.imports = ("caller_prober.tasks.probe_tasks",)
 
 
 @app.task(bind=True, max_retries=3, default_retry_delay=5)
@@ -101,10 +106,18 @@ def dispatch_async_sms(self, phone, message):
 
 
 # Celery Beat Periodic Tasks Configuration
+from py_phone_caller_utils.config import settings
+
 app.conf.beat_schedule = {
     "periodic-telephony-recall": {
         "task": "py_phone_caller_utils.tasks.celery_task.periodic_recall_task",
         "schedule": 15.0,  # runs every 15 seconds
+        "options": {"queue": "telephony.p2"},
+    },
+    "periodic-probe-scan": {
+        "task": "caller_prober.tasks.probe_tasks.scan_probes",
+        # Scan cadence; each probe's own cron schedule decides when it fires.
+        "schedule": settings.get("caller_prober", {}).get("probe_scan_interval", 60.0),
         "options": {"queue": "telephony.p2"},
     },
 }

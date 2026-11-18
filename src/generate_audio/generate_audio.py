@@ -199,6 +199,12 @@ async def is_audio_ready(request):
     return web.json_response({"exists": exists})
 
 
+# Checksums whose wav is currently being synthesised. The pre-warm request
+# (fired when the call is dialled) holds this while Kokoro loads its model, so
+# the on-answer request does not spawn a second identical subprocess.
+_INFLIGHT_GENERATIONS: set[str] = set()
+
+
 async def create_audio(request):
     params = await extract_params(request)
     message = params.get("message")
@@ -244,6 +250,13 @@ async def create_audio(request):
         )
         return web.json_response({"status": 200, "cached": True})
 
+    if output_path in _INFLIGHT_GENERATIONS:
+        logging.info(
+            f"Generation for {filename} is already running, not starting a second run"
+        )
+        return web.json_response({"status": 202, "in_progress": True})
+
+    _INFLIGHT_GENERATIONS.add(output_path)
     try:
         await asyncio.to_thread(
             generate_tts_audio,
@@ -259,6 +272,8 @@ async def create_audio(request):
         logging.exception(
             f"Unable to generate the audio file using {selected_engine.value}: '{err}'"
         )
+    finally:
+        _INFLIGHT_GENERATIONS.discard(output_path)
 
     return web.json_response({"status": status_code, "cached": False})
 

@@ -40,6 +40,7 @@ from flask_login import LoginManager
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 from py_phone_caller_utils.env_validator import run_startup_health_banner
+from py_phone_caller_utils.config import settings
 run_startup_health_banner("py_phone_caller_ui")
 
 from py_phone_caller_utils.login.user import User
@@ -71,6 +72,7 @@ from py_phone_caller_ui.exceptions import (
 from py_phone_caller_ui.home import home_blueprint
 from py_phone_caller_ui.login import login_blueprint
 from py_phone_caller_ui.openapi import get_ui_openapi_spec
+from py_phone_caller_ui.prober import prober_blueprint
 from py_phone_caller_ui.schedule_call import schedule_call_blueprint
 from py_phone_caller_ui.schemas import (
     AdminBootstrapResult,
@@ -97,7 +99,7 @@ init_telemetry("py_phone_caller_ui")
 _locale_service = LocaleService(
     supported_locales=SUPPORTED_LOCALES,
     aliases=LOCALE_ALIASES,
-    default_locale="en",
+    default_locale="zh",
 )
 _auth_service = UserAuthenticationService(loader_fn=load_user_by_id)
 _admin_service = AdminBootstrapService(admin_user=UI_ADMIN_USER)
@@ -119,12 +121,17 @@ app.config["SESSION_PERMANENT"] = False
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 app.config["SESSION_COOKIE_HTTPONLY"] = True
 app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 604800
+app.config["TEMPLATES_AUTO_RELOAD"] = True
 
 
 @app.after_request
 def add_static_cache_headers(response: Response) -> Response:
     if request.path.startswith("/static/"):
         response.headers["Cache-Control"] = "public, max-age=604800, immutable"
+    else:
+        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
     return response
 
 app.wsgi_app = ProxyFix(
@@ -148,7 +155,7 @@ def get_locale() -> str:
     )
 
 
-app.config["BABEL_DEFAULT_LOCALE"] = "en"
+app.config["BABEL_DEFAULT_LOCALE"] = "zh"
 app.config["BABEL_TRANSLATION_DIRECTORIES"] = os.path.join(current_dir, "translations")
 
 babel = Babel(app, locale_selector=get_locale)
@@ -173,6 +180,36 @@ def inject_locale_info() -> dict[str, Any]:
         "current_locale_meta": SUPPORTED_LOCALES.get(curr, SUPPORTED_LOCALES["en"]),
         "supported_locales": SUPPORTED_LOCALES,
         "_": _,
+    }
+
+@app.context_processor
+def inject_webhook_info() -> dict[str, Any]:
+    webhook_cfg = settings.get("caller_prometheus_webhook", {})
+    port = int(webhook_cfg.get("prometheus_webhook_port", 8084))
+    token = str(
+        webhook_cfg.get("webhook_auth_token")
+        or webhook_cfg.get("webhook_token")
+        or ""
+    ).strip()
+    host = "127.0.0.1"
+    scheme = "http"
+    if request:
+        try:
+            host = request.host.split(":")[0]
+            scheme = request.scheme
+        except Exception:
+            pass
+    base_url = f"{scheme}://{host}:{port}"
+    token_qs = f"?token={token}" if token else ""
+    return {
+        "webhook_port": port,
+        "webhook_auth_token": token,
+        "webhook_base_url": base_url,
+        "webhook_call_and_sms_url": f"{base_url}/call_and_sms{token_qs}",
+        "webhook_call_only_url": f"{base_url}/call_only{token_qs}",
+        "webhook_sms_only_url": f"{base_url}/sms_only{token_qs}",
+        "webhook_sms_before_call_url": f"{base_url}/sms_before_call{token_qs}",
+        "webhook_alert_url": f"{base_url}/alert{token_qs}",
     }
 
 
@@ -210,6 +247,7 @@ app.register_blueprint(users_blueprint)
 app.register_blueprint(ws_events_blueprint)
 app.register_blueprint(address_book_blueprint)
 app.register_blueprint(sms_blueprint)
+app.register_blueprint(prober_blueprint)
 
 
 @app.route("/docs")

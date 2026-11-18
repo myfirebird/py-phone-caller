@@ -1,0 +1,760 @@
+{% extends "base.html" %}
+
+{% block title %}py-phone-caller {{ _('Duty & Prober') }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid main-container px-4">
+    <!-- Page Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap">
+        <div>
+            <h2 class="page-header mb-0 text-start"><i class="bi bi-broadcast-pin me-2"></i>{{ _('Duty & Prober') }}</h2>
+            {% if config_path %}
+            <div class="small text-muted mt-1"><i class="bi bi-file-earmark-text me-1"></i><code>{{ config_path }}</code></div>
+            {% endif %}
+        </div>
+        <div class="d-flex gap-2 mt-2 mt-md-0 flex-wrap">
+            <button class="btn btn-outline-secondary" type="button" data-bs-toggle="offcanvas" data-bs-target="#helpOffcanvas" aria-controls="helpOffcanvas">
+                <i class="bi bi-book-half me-1"></i>{{ _('Webhook Integration Guide') }}
+            </button>
+            <button class="btn btn-outline-primary" onclick="location.reload()">
+                <i class="bi bi-arrow-clockwise me-1"></i> {{ _('Reload') }}
+            </button>
+            <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#groupModal" onclick="openAddGroup()">
+                <i class="bi bi-people me-1"></i> {{ _('Add Duty Group') }}
+            </button>
+            <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#probeModal" onclick="openAddProbe()">
+                <i class="bi bi-telephone-outbound me-1"></i> {{ _('Add Probe') }}
+            </button>
+        </div>
+    </div>
+
+    <!-- Tabs: configuration vs records -->
+    <ul class="nav nav-tabs mb-4">
+        <li class="nav-item">
+            <a class="nav-link active" href="{{ url_for('prober_blueprint.prober') }}">
+                <i class="bi bi-sliders me-1"></i>{{ _('Duty & Prober') }}
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link" href="{{ url_for('prober_blueprint.prober_records') }}">
+                <i class="bi bi-clock-history me-1"></i>{{ _('Probe Records') }}
+            </a>
+        </li>
+    </ul>
+
+    {% if error %}
+    <div class="alert alert-danger d-flex align-items-center mb-4" role="alert">
+        <i class="bi bi-exclamation-triangle-fill me-2"></i>
+        <div>{{ error }}</div>
+    </div>
+    {% endif %}
+
+    <!-- Card 1: Duty Groups (值班组) -->
+    <div class="card border-0 shadow-sm mb-4 rounded-3">
+        <div class="card-header bg-light d-flex justify-content-between align-items-center py-3">
+            <div>
+                <i class="bi bi-people-fill me-2 text-primary fs-5 align-middle"></i><strong class="fs-6 align-middle">{{ _('Duty Groups') }}</strong>
+                <span class="badge bg-primary-subtle text-primary border border-primary-subtle ms-2 align-middle">{{ config.duty_groups|length if config else 0 }}</span>
+            </div>
+            <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#groupModal" onclick="openAddGroup()">
+                <i class="bi bi-plus-lg me-1"></i>{{ _('Add Duty Group') }}
+            </button>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                <tr>
+                    <th>{{ _('Group Name') }}</th>
+                    <th class="text-center">{{ _('Notification Type') }}</th>
+                    <th>{{ _('Members') }} <i class="bi bi-info-circle text-muted small" data-bs-toggle="tooltip" title="{{ _('Called sequentially until someone presses the ACK digit') }}"></i></th>
+                    <th class="text-center">{{ _('Escalation Timeout') }}</th>
+                    <th>{{ _('Webhook Push URL') }}</th>
+                    <th class="text-end">{{ _('Actions') }}</th>
+                </tr>
+                </thead>
+                <tbody>
+                {% if config %}
+                {% for name, g in config.duty_groups.items() %}
+                <tr>
+                    <td class="fw-bold text-dark">{{ name }}</td>
+                    <td class="text-center">
+                        {% if g.notification_type == 'call' %}
+                        <span class="badge bg-primary-subtle text-primary border border-primary-subtle"><i class="bi bi-telephone-fill me-1"></i>{{ _('Voice Call') }}</span>
+                        {% elif g.notification_type == 'sms' %}
+                        <span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle"><i class="bi bi-chat-text-fill me-1"></i>{{ _('SMS Text') }}</span>
+                        {% elif g.notification_type == 'sms_before_call' %}
+                        <span class="badge bg-info-subtle text-info border border-info-subtle"><i class="bi bi-clock-history me-1"></i>{{ _('SMS Before Call') }}</span>
+                        {% else %}
+                        <span class="badge bg-success-subtle text-success border border-success-subtle"><i class="bi bi-bell-fill me-1"></i>{{ _('Simultaneous (Call + SMS)') }}</span>
+                        {% endif %}
+                        {% if g.lang %}
+                        <span class="badge bg-dark-subtle text-dark border border-dark-subtle ms-1" title="{{ _('TTS Language') }}">TTS: {{ g.lang }}</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% for m in g.members %}
+                        <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle me-1 mb-1">{{ m.name }} <code>{{ m.phone }}</code></span>
+                        {% endfor %}
+                    </td>
+                    <td class="text-center"><span class="badge bg-info-subtle text-info border border-info-subtle">{{ g.escalation_timeout }}s</span></td>
+                    <td>
+                        <div class="d-flex align-items-center gap-1">
+                            <code class="small text-truncate group-webhook-display" data-group="{{ name }}" data-group-id="{{ g.id }}" data-route="{{ g.notification_type or 'call_and_sms' }}" data-token="{{ g.token }}" style="max-width: 280px;" title="POST {{ webhook_base_url }}/{{ g.notification_type or 'call_and_sms' }}?group_id={{ g.id }}&token={{ g.token }}">POST .../{{ g.notification_type or 'call_and_sms' }}?group_id={{ g.id }}</code>
+                            <button class="btn btn-link btn-sm p-0 text-secondary" type="button" title="{{ _('Copy URL') }}" onclick="copyGroupWebhookUrl('{{ g.id }}', '{{ g.notification_type or "call_and_sms" }}', '{{ g.token }}', this)">
+                                <i class="bi bi-clipboard"></i>
+                            </button>
+                        </div>
+                    </td>
+                    <td class="text-end">
+                        <div class="btn-group btn-group-sm">
+                            <button class="btn btn-outline-secondary" title="{{ _('Test webhook delivery') }}"
+                                    onclick="testWebhook('{{ name }}', '{{ g.webhook_url }}')">
+                                <i class="bi bi-lightning-charge"></i>
+                            </button>
+                            <button class="btn btn-outline-warning" title="{{ _('Regenerate Token') }}"
+                                    onclick="regenToken('{{ name }}')">
+                                <i class="bi bi-key"></i>
+                            </button>
+                            <button class="btn btn-outline-primary"
+                                    data-name="{{ name }}"
+                                    data-group-id="{{ g.id }}"
+                                    data-escalation="{{ g.escalation_timeout }}"
+                                    data-webhook="{{ g.webhook_url }}"
+                                    data-notification-type="{{ g.notification_type or 'call_and_sms' }}"
+                                    data-token="{{ g.token }}"
+                                    data-lang="{{ g.lang or '' }}"
+                                    data-members='{{ groups_json[name] | tojson }}'
+                                    onclick="openEditGroup(this)">
+                                <i class="bi bi-pencil"></i>
+                            </button>
+                            <button class="btn btn-outline-danger" onclick="deleteGroup('{{ name }}')">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+                {% endif %}
+                {% if not config or not config.duty_groups %}
+                <tr>
+                    <td colspan="6" class="text-center py-5 text-muted">
+                        <i class="bi bi-people fs-1 d-block mb-2"></i>
+                        {{ _('No duty groups configured') }}
+                    </td>
+                </tr>
+                {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Card 2: Probe Tasks (拨测任务) -->
+    <div class="card border-0 shadow-sm mb-4 rounded-3">
+        <div class="card-header bg-light d-flex justify-content-between align-items-center py-3">
+            <div>
+                <i class="bi bi-telephone-outbound-fill me-2 text-success fs-5 align-middle"></i><strong class="fs-6 align-middle">{{ _('Probe Tasks') }}</strong>
+                <span class="badge bg-success-subtle text-success border border-success-subtle ms-2 align-middle">{{ config.probes|length if config else 0 }}</span>
+            </div>
+            <button class="btn btn-sm btn-success" data-bs-toggle="modal" data-bs-target="#probeModal" onclick="openAddProbe()">
+                <i class="bi bi-plus-lg me-1"></i>{{ _('Add Probe') }}
+            </button>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                <tr>
+                    <th>{{ _('Probe Name') }}</th>
+                    <th>{{ _('Phone') }}</th>
+                    <th class="text-center">{{ _('Type') }}</th>
+                    <th>{{ _('Schedule') }}</th>
+                    <th class="text-center">{{ _('Timeout / Talk') }}</th>
+                    <th>{{ _('DTMF') }}</th>
+                    <th>{{ _('Duty Group') }}</th>
+                    <th class="text-end">{{ _('Actions') }}</th>
+                </tr>
+                </thead>
+                <tbody>
+                {% if config and config.probes %}
+                {% for p in config.probes %}
+                <tr>
+                    <td class="fw-bold text-dark">{{ p.name }}
+                        {% if p.enabled %}
+                        <span class="badge bg-success-subtle text-success border border-success-subtle ms-1" title="{{ _('Scheduled probing is running') }}">{{ _('Running') }}</span>
+                        {% else %}
+                        <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle ms-1" title="{{ _('Scheduled probing is stopped') }}">{{ _('Stopped') }}</span>
+                        {% endif %}
+                    </td>
+                    <td><code class="text-primary">{{ p.phone }}</code></td>
+                    <td class="text-center">
+                        {% if p.probe_type == 'callcenter' %}
+                        <span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle">{{ _('Call Center') }}</span>
+                        {% else %}
+                        <span class="badge bg-primary-subtle text-primary border border-primary-subtle">{{ _('Direct') }}</span>
+                        {% endif %}
+                    </td>
+                    <td><code class="small">{{ p.schedule or '—' }}</code></td>
+                    <td class="text-center">{{ p.timeout }}s <span class="text-muted small">/ {{ p.max_call_seconds }}s</span></td>
+                    <td><code class="small">{{ p.dtmf_digits or '—' }}</code></td>
+                    <td><span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">{{ p.duty_group }}</span></td>
+                    <td class="text-end">
+                        <div class="btn-group btn-group-sm">
+                            {% if p.enabled %}
+                            <button class="btn btn-outline-warning" title="{{ _('Stop Probe') }}" onclick="toggleProbe('{{ p.name }}', false)">
+                                <i class="bi bi-stop-fill"></i>
+                            </button>
+                            {% else %}
+                            <button class="btn btn-outline-success" title="{{ _('Start Probe') }}" onclick="toggleProbe('{{ p.name }}', true)">
+                                <i class="bi bi-play-fill"></i>
+                            </button>
+                            {% endif %}
+                            <button class="btn btn-outline-secondary" title="{{ _('Run this probe now') }}" onclick="runProbe('{{ p.name }}')">
+                                <i class="bi bi-lightning-charge"></i>
+                            </button>
+                            <button class="btn btn-outline-primary"
+                                    data-name="{{ p.name }}"
+                                    data-phone="{{ p.phone }}"
+                                    data-type="{{ p.probe_type }}"
+                                    data-schedule="{{ p.schedule }}"
+                                    data-timeout="{{ p.timeout }}"
+                                    data-max-call="{{ p.max_call_seconds }}"
+                                    data-token="{{ p.token }}"
+                                    data-probe-id="{{ p.id }}"
+                                    data-dtmf="{{ p.dtmf_digits or '' }}"
+                                    data-duty-group="{{ p.duty_group }}"
+                                    onclick="openEditProbe(this)">
+                                <i class="bi bi-pencil"></i>
+                            </button>
+                            <button class="btn btn-outline-danger" onclick="deleteProbe('{{ p.name }}')">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+                {% endif %}
+                {% if not config or not config.probes %}
+                <tr>
+                    <td colspan="8" class="text-center py-5 text-muted">
+                        <i class="bi bi-telephone-x fs-1 d-block mb-2"></i>
+                        {{ _('No probe targets configured') }}
+                    </td>
+                </tr>
+                {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+<!-- Duty Group Modal -->
+<div class="modal fade" id="groupModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content border-0 shadow-lg">
+            <div class="modal-header bg-light">
+                <h5 class="modal-title fw-bold"><i class="bi bi-people me-2 text-primary"></i><span id="groupModalTitle">{{ _('Add Duty Group') }}</span></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-4">
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold small text-secondary">{{ _('Group Name') }}</label>
+                        <input id="grp_name" class="form-control" placeholder="network_ops" oninput="updateModalWebhookUrl()"/>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold small text-secondary">{{ _('Notification Type') }}</label>
+                        <select id="grp_notification_type" class="form-select" onchange="updateModalWebhookUrl()">
+                            <option value="call_and_sms">{{ _('Simultaneous (Call + SMS)') }}</option>
+                            <option value="call">{{ _('Voice Call') }}</option>
+                            <option value="sms">{{ _('SMS Text') }}</option>
+                            <option value="sms_before_call">{{ _('SMS Before Call') }}</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <input type="hidden" id="grp_group_id" value=""/>
+                        <label class="form-label fw-bold small text-secondary">{{ _('Security Token') }}</label>
+                        <div class="input-group">
+                            <input id="grp_token" class="form-control font-monospace" placeholder="Token" oninput="updateModalWebhookUrl()"/>
+                            <button class="btn btn-outline-secondary" type="button" onclick="randomizeGrpToken()" title="{{ _('Generate Token') }}">
+                                <i class="bi bi-arrow-repeat me-1"></i>{{ _('Generate Token') }}
+                            </button>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label fw-bold small text-secondary">{{ _('Escalation Timeout (s)') }} <i class="bi bi-question-circle text-muted small" data-bs-toggle="tooltip" title="{{ _('Seconds to wait for the ACK digit before escalating to the next member') }}"></i></label>
+                        <input id="grp_escalation" type="number" min="1" step="1" class="form-control" value="60"/>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label fw-bold small text-secondary">{{ _('TTS Language') }} <i class="bi bi-question-circle text-muted small" data-bs-toggle="tooltip" title="{{ _('Voice language for webhook calls on this group (e.g. z for Kokoro Mandarin). Empty uses the service-wide webhook_tts_lang setting.') }}"></i></label>
+                        <input id="grp_lang" class="form-control font-monospace" placeholder="z"/>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label fw-bold small text-secondary">&nbsp;</label>
+                        <button type="button" class="btn btn-outline-primary w-100" onclick="addGroupMemberRow()">
+                            <i class="bi bi-person-plus me-1"></i>{{ _('Add Member') }}
+                        </button>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label fw-bold small text-secondary d-flex justify-content-between align-items-center">
+                            <span>{{ _('Webhook Push URL') }} <span class="badge bg-info-subtle text-info border border-info-subtle ms-2">{{ _('Auto Generated') }}</span></span>
+                            <a href="javascript:void(0)" class="text-decoration-none small" onclick="copyModalWebhookUrl(this)"><i class="bi bi-clipboard me-1"></i>{{ _('Copy') }}</a>
+                        </label>
+                        <div class="input-group">
+                            <input id="grp_webhook" class="form-control font-monospace" placeholder="http://..."/>
+                            <button class="btn btn-outline-secondary" type="button" onclick="copyModalWebhookUrl(this)" title="{{ _('Copy') }}">
+                                <i class="bi bi-clipboard me-1"></i><span class="copy-label">{{ _('Copy') }}</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label fw-bold small text-secondary">{{ _('Members (escalation order)') }}</label>
+                        <div id="grp_members"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer bg-light border-0">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{{ _('Cancel') }}</button>
+                <button type="button" class="btn btn-primary px-4" onclick="saveGroup()">{{ _('Save Group') }}</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Probe Modal -->
+<div class="modal fade" id="probeModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content border-0 shadow-lg">
+            <div class="modal-header bg-light">
+                <h5 class="modal-title fw-bold"><i class="bi bi-telephone-outbound me-2 text-success"></i><span id="probeModalTitle">{{ _('Add Probe') }}</span></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-4">
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold small text-secondary">{{ _('Probe Name') }}</label>
+                        <input id="prb_name" class="form-control" placeholder="hotline"/>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold small text-secondary">{{ _('Phone Number') }}</label>
+                        <input id="prb_phone" class="form-control" placeholder="95100"/>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold small text-secondary">{{ _('Type') }} <i class="bi bi-question-circle text-muted small" data-bs-toggle="tooltip" title="{{ _('Call Center: requires answer + Stasis + media + DTMF liveness. Direct: ringing or answer is healthy.') }}"></i></label>
+                        <select id="prb_type" class="form-select">
+                            <option value="callcenter">{{ _('Call Center') }}</option>
+                            <option value="direct">{{ _('Direct') }}</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold small text-secondary">{{ _('Cron Schedule') }} <i class="bi bi-question-circle text-muted small" data-bs-toggle="tooltip" title="{{ _('5-field cron expression, evaluated in UTC (e.g. 0 9 * * * for 09:00 daily)') }}"></i></label>
+                        <input id="prb_schedule" class="form-control" placeholder="0 9 * * *"/>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold small text-secondary">{{ _('Duty Group') }}</label>
+                        <select id="prb_duty_group" class="form-select">
+                            {% if config %}
+                            {% for gname in config.duty_groups %}
+                            <option value="{{ gname }}">{{ gname }}</option>
+                            {% endfor %}
+                            {% endif %}
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label fw-bold small text-secondary">{{ _('Timeout (s)') }}</label>
+                        <input id="prb_timeout" type="number" min="1" step="1" class="form-control" value="60"/>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label fw-bold small text-secondary">{{ _('Talk Limit (s)') }} <i class="bi bi-question-circle text-muted small" data-bs-toggle="tooltip" title="{{ _('Hang up automatically once the call has been connected for this many seconds') }}"></i></label>
+                        <input id="prb_max_call" type="number" min="1" step="1" class="form-control" value="20"/>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold small text-secondary">{{ _('DTMF Digits') }} <i class="bi bi-question-circle text-muted small" data-bs-toggle="tooltip" title="{{ _('Sent 2 seconds after answer (call center probes). Leave empty to skip.') }}"></i></label>
+                        <input id="prb_dtmf" class="form-control" placeholder="1"/>
+                    </div>
+                </div>
+
+                <!-- Probe trigger webhook (monitoring systems start this probe on demand) -->
+                <hr class="my-4"/>
+                <label class="form-label fw-bold small text-secondary d-flex justify-content-between align-items-center">
+                    <span><i class="bi bi-hdd-network me-1 text-primary"></i>{{ _('Probe Trigger Webhook') }}</span>
+                    <span class="d-flex gap-2">
+                        <a href="javascript:void(0)" class="text-decoration-none small" onclick="copyProbeWebhookUrl(this)"><i class="bi bi-clipboard me-1"></i>{{ _('Copy') }}</a>
+                        <a href="javascript:void(0)" class="text-decoration-none small" onclick="regenerateProbeToken()"><i class="bi bi-arrow-repeat me-1"></i>{{ _('Regenerate token') }}</a>
+                    </span>
+                </label>
+                <div class="input-group input-group-sm">
+                    <span class="input-group-text font-monospace bg-light">POST</span>
+                    <input id="prb_webhook_url" class="form-control font-monospace" readonly value=""/>
+                </div>
+                <input type="hidden" id="prb_token" value=""/>
+                <input type="hidden" id="prb_probe_id" value=""/>
+                <div class="form-text">
+                    {{ _('POST this URL from Zabbix (or any monitoring tool) to run the probe immediately; failures raise the duty-group alarm exactly like a scheduled run. Authentication uses the token in the URL.') }}
+                </div>
+            </div>
+            <div class="modal-footer bg-light border-0">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{{ _('Cancel') }}</button>
+                <button type="button" class="btn btn-success px-4" onclick="saveProbe()">{{ _('Save Probe') }}</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const GROUP_URL = "{{ url_for('prober_blueprint.api_save_group') }}";
+const GROUP_DEL_URL = "{{ url_for('prober_blueprint.api_delete_group') }}";
+const GROUP_REGEN_TOKEN_URL = "{{ url_for('prober_blueprint.api_regen_group_token') }}";
+const TOKEN_GEN_URL = "{{ url_for('prober_blueprint.api_generate_token') }}";
+const PROBE_URL = "{{ url_for('prober_blueprint.api_save_probe') }}";
+const PROBE_DEL_URL = "{{ url_for('prober_blueprint.api_delete_probe') }}";
+const PROBE_RUN_URL = "{{ url_for('prober_blueprint.api_run_probe') }}";
+const PROBE_TOGGLE_URL = "{{ url_for('prober_blueprint.api_toggle_probe') }}";
+const WEBHOOK_TEST_URL = "{{ url_for('prober_blueprint.api_test_webhook') }}";
+
+async function api(url, body) {
+    const resp = await fetch(url, {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify(body || {}),
+    });
+    return {ok: resp.ok, data: await resp.json().catch(() => ({}))};
+}
+
+function flash(kind, msg) {
+    const el = document.createElement("div");
+    el.className = "alert alert-" + kind + " alert-dismissible fade show";
+    el.innerHTML = '<i class="bi bi-' + (kind === "success" ? "check-circle" : "exclamation-triangle") + '-fill me-2"></i>' + msg +
+        '<button type="button" class="btn-close" data-bs-dismiss="alert"></button>';
+    const host = document.querySelector(".container-fluid.main-container");
+    host.insertBefore(el, host.firstChild);
+    setTimeout(() => el.remove(), 8000);
+}
+
+function addGroupMemberRow(name, phone) {
+    const row = document.createElement("div");
+    row.className = "input-group input-group-sm mb-2 prb-member";
+    row.innerHTML = '<span class="input-group-text"><i class="bi bi-person"></i></span>' +
+        '<input class="form-control m-name" placeholder="{{ _('Name') }}" value="' + (name || "") + '">' +
+        '<input class="form-control m-phone" placeholder="{{ _('Phone') }}" value="' + (phone || "") + '">' +
+        '<button class="btn btn-outline-danger" type="button" onclick="this.parentElement.remove()"><i class="bi bi-x-lg"></i></button>';
+    document.getElementById("grp_members").appendChild(row);
+}
+
+function generateRandomToken() {
+    return 'tok_' + Math.random().toString(36).substring(2, 10) + Math.random().toString(36).substring(2, 10);
+}
+
+function newGroupId() {
+    return crypto.randomUUID ? crypto.randomUUID().replace(/-/g, "") : generateRandomToken().replace(/^tok_/, "");
+}
+
+function updateModalWebhookUrl() {
+    const host = window.location.hostname;
+    const protocol = window.location.protocol;
+    const port = "{{ webhook_port or 8084 }}";
+    const notifType = document.getElementById("grp_notification_type").value || 'call_and_sms';
+    const token = document.getElementById("grp_token").value.trim();
+    const groupId = document.getElementById("grp_group_id").value.trim() || newGroupId();
+    document.getElementById("grp_group_id").value = groupId;
+    const tokParam = token ? `&token=${encodeURIComponent(token)}` : '';
+    document.getElementById("grp_webhook").value = `${protocol}//${host}:${port}/${notifType}?group_id=${encodeURIComponent(groupId)}${tokParam}`;
+}
+
+async function randomizeGrpToken() {
+    try {
+        const resp = await fetch(TOKEN_GEN_URL);
+        const data = await resp.json();
+        if (data && data.token) {
+            document.getElementById("grp_token").value = data.token;
+            updateModalWebhookUrl();
+            return;
+        }
+    } catch(e) {}
+    document.getElementById("grp_token").value = generateRandomToken();
+    updateModalWebhookUrl();
+}
+
+async function openAddGroup() {
+    document.getElementById("groupModalTitle").textContent = "{{ _('Add Duty Group') }}";
+    document.getElementById("grp_name").value = "";
+    document.getElementById("grp_group_id").value = newGroupId();
+    document.getElementById("grp_escalation").value = "60";
+    document.getElementById("grp_notification_type").value = "call_and_sms";
+    document.getElementById("grp_lang").value = "";
+    document.getElementById("grp_members").innerHTML = "";
+    await randomizeGrpToken();
+    updateModalWebhookUrl();
+    addGroupMemberRow();
+}
+
+function openEditGroup(btn) {
+    document.getElementById("groupModalTitle").textContent = "{{ _('Edit Duty Group') }}";
+    document.getElementById("grp_name").value = btn.dataset.name || "";
+    document.getElementById("grp_group_id").value = btn.dataset.groupId || newGroupId();
+    document.getElementById("grp_escalation").value = btn.dataset.escalation || "60";
+    document.getElementById("grp_notification_type").value = btn.dataset.notificationType || "call_and_sms";
+    document.getElementById("grp_lang").value = btn.dataset.lang || "";
+    document.getElementById("grp_token").value = btn.dataset.token || "";
+    updateModalWebhookUrl();
+    const groupData = JSON.parse(btn.dataset.members || "{}");
+    const members = (groupData && groupData.members) ? groupData.members : [];
+    document.getElementById("grp_members").innerHTML = "";
+    (members.length ? members : [{}]).forEach(m => addGroupMemberRow(m.name, m.phone));
+    new bootstrap.Modal(document.getElementById("groupModal")).show();
+}
+
+async function regenToken(groupName) {
+    if (!confirm("{{ _('Regenerate Token') }}" + " '" + groupName + "'?")) return;
+    const {ok, data} = await api(GROUP_REGEN_TOKEN_URL, {name: groupName});
+    flash(ok ? "success" : "danger", data.message || "");
+    if (ok) setTimeout(() => location.reload(), 600);
+}
+
+async function saveGroup() {
+    const members = [...document.querySelectorAll(".prb-member")].map(row => ({
+        name: row.querySelector(".m-name").value.trim(),
+        phone: row.querySelector(".m-phone").value.trim(),
+    }));
+    const body = {
+        name: document.getElementById("grp_name").value.trim(),
+        webhook_url: document.getElementById("grp_webhook").value.trim(),
+        escalation_timeout: parseFloat(document.getElementById("grp_escalation").value),
+        notification_type: document.getElementById("grp_notification_type").value,
+        lang: document.getElementById("grp_lang").value.trim(),
+        token: document.getElementById("grp_token").value.trim(),
+        id: document.getElementById("grp_group_id").value.trim(),
+        members: members,
+    };
+    const {ok, data} = await api(GROUP_URL, body);
+    flash(ok ? "success" : "danger", data.message || (ok ? "saved" : "error"));
+    if (ok) setTimeout(() => location.reload(), 600);
+}
+
+async function deleteGroup(name) {
+    if (!confirm("{{ _('Delete duty group') }}" + " '" + name + "'?")) return;
+    const {ok, data} = await api(GROUP_DEL_URL, {name});
+    flash(ok ? "success" : "danger", data.message || "");
+    if (ok) setTimeout(() => location.reload(), 600);
+}
+
+function probeWebhookUrl(probeId, token) {
+    const host = window.location.hostname;
+    const protocol = window.location.protocol;
+    const port = "{{ webhook_port or 8084 }}";
+    const id = probeId || 'probe_id';
+    const tok = token || '';
+    return `${protocol}//${host}:${port}/probe?probe_id=${encodeURIComponent(id)}&token=${encodeURIComponent(tok)}`;
+}
+
+function updateProbeWebhookUrl() {
+    const id = document.getElementById("prb_probe_id").value.trim();
+    const token = document.getElementById("prb_token").value.trim();
+    document.getElementById("prb_webhook_url").value = probeWebhookUrl(id, token);
+}
+
+function newProbeId() {
+    return crypto.randomUUID ? crypto.randomUUID().replace(/-/g, "") : generateRandomToken().replace(/^tok_/, "");
+}
+
+function regenerateProbeToken() {
+    // Only the secret rotates; the probe id keeps existing URLs addressable.
+    document.getElementById("prb_token").value = generateRandomToken();
+    if (!document.getElementById("prb_probe_id").value.trim()) {
+        document.getElementById("prb_probe_id").value = newProbeId();
+    }
+    updateProbeWebhookUrl();
+}
+
+function copyProbeWebhookUrl(btn) {
+    universalCopyText(document.getElementById("prb_webhook_url").value, btn);
+}
+
+function openAddProbe() {
+    document.getElementById("probeModalTitle").textContent = "{{ _('Add Probe') }}";
+    ["prb_name", "prb_phone", "prb_schedule", "prb_dtmf"].forEach(id => document.getElementById(id).value = "");
+    document.getElementById("prb_max_call").value = "20";
+    document.getElementById("prb_type").value = "callcenter";
+    document.getElementById("prb_timeout").value = "60";
+    document.getElementById("prb_token").value = generateRandomToken();
+    document.getElementById("prb_probe_id").value = newProbeId();
+    updateProbeWebhookUrl();
+}
+
+function openEditProbe(btn) {
+    openAddProbe();
+    document.getElementById("probeModalTitle").textContent = "{{ _('Edit Probe') }}";
+    document.getElementById("prb_name").value = btn.dataset.name;
+    document.getElementById("prb_phone").value = btn.dataset.phone;
+    document.getElementById("prb_type").value = btn.dataset.type;
+    document.getElementById("prb_schedule").value = btn.dataset.schedule || "";
+    document.getElementById("prb_timeout").value = btn.dataset.timeout;
+    document.getElementById("prb_max_call").value = btn.dataset.maxCall || "20";
+    document.getElementById("prb_dtmf").value = btn.dataset.dtmf || "";
+    document.getElementById("prb_duty_group").value = btn.dataset.dutyGroup;
+    document.getElementById("prb_token").value = btn.dataset.token || generateRandomToken();
+    document.getElementById("prb_probe_id").value = btn.dataset.probeId || "";
+    updateProbeWebhookUrl();
+    new bootstrap.Modal(document.getElementById("probeModal")).show();
+}
+
+async function saveProbe() {
+    const body = {
+        name: document.getElementById("prb_name").value.trim(),
+        phone: document.getElementById("prb_phone").value.trim(),
+        type: document.getElementById("prb_type").value,
+        schedule: document.getElementById("prb_schedule").value.trim(),
+        timeout: parseFloat(document.getElementById("prb_timeout").value),
+        max_call_seconds: parseFloat(document.getElementById("prb_max_call").value),
+        dtmf_digits: document.getElementById("prb_dtmf").value.trim(),
+        duty_group: document.getElementById("prb_duty_group").value,
+        token: document.getElementById("prb_token").value.trim(),
+        id: document.getElementById("prb_probe_id").value.trim(),
+    };
+    const {ok, data} = await api(PROBE_URL, body);
+    flash(ok ? "success" : "danger", data.message || "");
+    if (ok) setTimeout(() => location.reload(), 600);
+}
+
+async function deleteProbe(name) {
+    if (!confirm("{{ _('Delete probe') }}" + " '" + name + "'?")) return;
+    const {ok, data} = await api(PROBE_DEL_URL, {name});
+    flash(ok ? "success" : "danger", data.message || "");
+    if (ok) setTimeout(() => location.reload(), 600);
+}
+
+async function toggleProbe(name, enabled) {
+    const {ok, data} = await api(PROBE_TOGGLE_URL, {name, enabled});
+    flash(ok ? "success" : "danger", data.message || "");
+    if (ok) setTimeout(() => location.reload(), 600);
+}
+
+async function runProbe(name) {
+    flash("info", "{{ _('Dispatching probe') }}" + " '" + name + "'...");
+    const {ok, data} = await api(PROBE_RUN_URL, {name});
+    if (ok) {
+        flash("success", "{{ _('Probe dispatched, awaiting execution...') }} (Task: " + (data.task_id || '') + ")");
+        // Records live on their own tab now; offer the jump instead of polling here.
+        setTimeout(() => {
+            const link = "{{ url_for('prober_blueprint.prober_records') }}";
+            if (confirm("{{ _('Probe dispatched. Open the probe records?') }}")) location.href = link;
+        }, 1200);
+    } else {
+        flash("danger", data.message || "{{ _('Failed to dispatch probe') }}");
+    }
+}
+
+async function testWebhook(group, url) {
+    flash("info", "{{ _('Testing webhook') }}" + " '" + group + "'...");
+    const {ok, data} = await api(WEBHOOK_TEST_URL, {group: group, webhook_url: url});
+    flash(ok ? "success" : "danger", data.message || "");
+}
+
+function universalCopyText(text, btn, successHtml) {
+    if (!text) return;
+    function showSuccess() {
+        if (!btn) return;
+        const original = btn.innerHTML;
+        btn.innerHTML = successHtml || '<i class="bi bi-check-lg text-success me-1"></i>{{ _("Copied!") }}';
+        setTimeout(() => { btn.innerHTML = original; }, 2000);
+    }
+
+    if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(text).then(showSuccess).catch(fallback);
+    } else {
+        fallback();
+    }
+
+    function fallback() {
+        try {
+            const textArea = document.createElement("textarea");
+            textArea.value = text;
+            textArea.style.position = "fixed";
+            textArea.style.top = "0";
+            textArea.style.left = "-9999px";
+            textArea.style.width = "2em";
+            textArea.style.height = "2em";
+            textArea.style.padding = "0";
+            textArea.style.border = "none";
+            textArea.style.outline = "none";
+            textArea.style.boxShadow = "none";
+            textArea.style.background = "transparent";
+
+            const container = document.querySelector('.modal.show .modal-body') || document.querySelector('.modal.show') || document.body;
+            container.appendChild(textArea);
+
+            textArea.focus({preventScroll: true});
+            textArea.select();
+            textArea.setSelectionRange(0, 99999);
+            const successful = document.execCommand('copy');
+            container.removeChild(textArea);
+            if (successful) {
+                showSuccess();
+            } else {
+                window.prompt("{{ _('Press Ctrl+C to copy:') }}", text);
+            }
+        } catch (err) {
+            window.prompt("{{ _('Press Ctrl+C to copy:') }}", text);
+        }
+    }
+}
+
+function copyModalWebhookUrl(btn) {
+    const el = document.getElementById("grp_webhook");
+    if (!el || !el.value) return;
+
+    function showFeedback() {
+        if (!btn) return;
+        const original = btn.innerHTML;
+        btn.innerHTML = '<i class="bi bi-check-lg text-success me-1"></i><span class="text-success fw-bold">{{ _("Copied!") }}</span>';
+        setTimeout(() => { btn.innerHTML = original; }, 2000);
+    }
+
+    if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(el.value).then(showFeedback).catch(fallbackDirect);
+        return;
+    }
+
+    fallbackDirect();
+
+    function fallbackDirect() {
+        try {
+            el.focus();
+            el.select();
+            el.setSelectionRange(0, 99999);
+            const ok = document.execCommand('copy');
+            if (ok) {
+                showFeedback();
+                return;
+            }
+        } catch(e) {}
+        universalCopyText(el.value, btn, '<i class="bi bi-check-lg text-success me-1"></i><span class="text-success fw-bold">{{ _("Copied!") }}</span>');
+    }
+}
+function copyGroupWebhookUrl(groupId, route, token, btn) {
+    const host = window.location.hostname;
+    const protocol = window.location.protocol;
+    const port = "{{ webhook_port or 8084 }}";
+    const tokParam = token ? `&token=${encodeURIComponent(token)}` : '';
+    const fullUrl = `${protocol}//${host}:${port}/${route}?group_id=${encodeURIComponent(groupId)}${tokParam}`;
+    universalCopyText(fullUrl, btn, '<i class="bi bi-check-lg text-success"></i>');
+}
+
+function initEnvironmentWebhookUrls() {
+    const host = window.location.hostname;
+    const protocol = window.location.protocol;
+    const port = "{{ webhook_port or 8084 }}";
+
+    document.querySelectorAll('.group-webhook-display').forEach(el => {
+        const gId = el.getAttribute('data-group-id') || '';
+        const route = el.getAttribute('data-route') || 'call_and_sms';
+        const gTok = el.getAttribute('data-token') || '';
+        const gTokParam = gTok ? `&token=${encodeURIComponent(gTok)}` : '';
+        const full = `POST ${protocol}//${host}:${port}/${route}?group_id=${encodeURIComponent(gId)}${gTokParam}`;
+        el.textContent = `POST .../${route}?group_id=${gId}`;
+        el.setAttribute('title', full);
+    });
+}
+document.addEventListener('DOMContentLoaded', initEnvironmentWebhookUrls);
+
+</script>
+{% endblock %}

@@ -34,6 +34,11 @@ asterisk_extension: "3216"
 custom_audio_files:
   - greeting-message.wav
   - press-4-for-acknowledgement.wav
+  # Played to the duty roster when the TTS service is unavailable; must stay a
+  # static file so it survives a generate_audio outage. Re-render with a new
+  # voice with:
+  #   ffmpeg -i tone.wav -i speech.wav ... -ar 8000 -ac 1 -c:a pcm_s16le
+  - prober-alarm.wav
 
 # --- Local Extensions (Air-Gapped Mode) ---
 local_sip: no

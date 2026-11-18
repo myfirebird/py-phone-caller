@@ -58,8 +58,11 @@ def build_asterisk_query_string(
 
     if chan_type.startswith("PJSIP") and "/" in chan_type:
         tech, trunk = chan_type.split("/", 1)
-        return f"endpoint={tech}/{phone}@{trunk}&extension={extension}&context={context}&callerId={caller_id}"
+        from py_phone_caller_utils.config import settings
 
+        sip_host = settings.get("pbx_sip_provider_host") or "172.28.17.225"
+        sip_port = settings.get("pbx_sip_provider_port") or 5060
+        return f"endpoint={tech}/{trunk}/sip:{phone}@{sip_host}:{sip_port}&extension={extension}&context={context}&callerId={caller_id}"
     return f"endpoint={chan_type}/{phone}&extension={extension}&context={context}&callerId={caller_id}"
 
 

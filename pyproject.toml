@@ -23,6 +23,7 @@ members = [
     "src/asterisk_ws_monitor",
     "src/caller_address_book",
     "src/caller_prometheus_webhook",
+    "src/caller_prober",
     "src/caller_register",
     "src/caller_scheduler",
     "src/caller_sms",

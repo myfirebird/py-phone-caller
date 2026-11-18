@@ -13,7 +13,9 @@ async def select_to_recall(
     are within the specified time window, and have not completed their call cycle.
 
     Args:
-        times_to_dial (int): The maximum number of allowed dial attempts.
+        times_to_dial (int): Deprecated; the per-row ``times_to_dial`` column
+            governs eligibility so the recall scan can never exceed the cap
+            stored when the call was registered.
         lesser_seconds_to_forget (datetime): The lower bound of the time window for first dial.
         greater_sleep_and_retry (datetime): The upper bound of the time window for first dial.
 
@@ -24,7 +26,10 @@ async def select_to_recall(
     result = await Calls.select(
         Calls.phone, Calls.message, Calls.seconds_to_forget
     ).where(
-        (Calls.dialed_times < times_to_dial)
+        # Compare against the cap stored on the row itself: the registration
+        # path never increments past it, so a global value above the row cap
+        # used to select the same call forever (dial loop every scan cycle).
+        (Calls.dialed_times < Calls.times_to_dial)
         & (Calls.first_dial >= lesser_seconds_to_forget)
         & (Calls.first_dial <= greater_sleep_and_retry)
         & (Calls.cycle_done == False)

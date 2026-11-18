@@ -8,6 +8,8 @@ asterisk_module_dir: /usr/lib64/asterisk/modules
 asterisk_data_dir: /var/lib/asterisk
 asterisk_cache_dir: /var/cache/asterisk
 asterisk_sounds_dir: /usr/share/asterisk/sounds/en
+# ARI channel/bridge recordings (probe call recording).
+asterisk_recording_dir: /var/spool/asterisk/recording
 
 # Asterisk packages for EL8/9/10.
 # On EL10+ (Rocky/RHEL/AlmaLinux 10), packages are provided via the lucamagrone/epel-10-extra COPR repository.

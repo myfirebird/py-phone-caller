@@ -32,7 +32,10 @@ from asterisk_caller.constants import (
     CALLER_ADDRESS_BOOK_ROUTE_ON_CALL_CONTACT,
     CALLER_ADDRESS_BOOK_URL,
     CLIENT_TIMEOUT_TOTAL,
+    GENERATE_AUDIO_APP_ROUTE,
     GENERATE_AUDIO_URL,
+    PREWARM_TTS,
+    PREWARM_TTS_TIMEOUT,
     SERVING_AUDIO_FOLDER,
     WAIT_FOR_CALL_CYCLE,
 )
@@ -288,6 +291,14 @@ class AsteriskCallerService:
         call_init_url = f"{self.current_asterisk_url}/{ASTERISK_ARI_CHANNELS}?{query_string}"
         headers = self.ari_client.get_auth_headers()
 
+        if PREWARM_TTS:
+            # Synthesise while the callee's phone is still ringing instead of
+            # after the answer, which otherwise leaves 10-15s of silence: the
+            # Kokoro runner loads its model in a fresh subprocess per request.
+            asyncio.create_task(
+                self.prewarm_tts_audio(payload.message, payload.lang)
+            )
+
         return await self.initiate_asterisk_call(
             call_init_url,
             payload.phone,
@@ -297,6 +308,41 @@ class AsteriskCallerService:
             payload.backup_callee,
             lang=payload.lang,
         )
+
+    async def prewarm_tts_audio(self, message: str, lang: str | None = None) -> None:
+        """Requests the announcement audio before the callee answers.
+
+        Mirrors the filename the playback path expects
+        (``<blake2b-4 bytes of message>[_<lang>].wav``) so the on-answer
+        synthesis step finds the file already rendered and returns immediately.
+
+        Args:
+            message: Announcement text that will be spoken.
+            lang: Optional TTS voice language code.
+        """
+        try:
+            from py_phone_caller_utils.checksums import gen_msg_chk_sum
+
+            checksum = await gen_msg_chk_sum(message)
+            params = {"message": message, "msg_chk_sum": checksum}
+            if lang:
+                params["lang"] = str(lang).strip()
+            # The endpoint answers only after the wav exists (~15s), so use a
+            # dedicated budget instead of the short call-placement timeout.
+            session_cls = ClientSession
+            async with session_cls(
+                timeout=ClientTimeout(total=PREWARM_TTS_TIMEOUT)
+            ) as session:
+                await session.post(
+                    url=f"{self.audio_service_url}/{GENERATE_AUDIO_APP_ROUTE}",
+                    params=params,
+                    data=None,
+                )
+            logging.info(
+                f"Pre-warmed TTS audio for checksum '{checksum}' while dialing"
+            )
+        except Exception as err:  # noqa: BLE001 - never block the call
+            logging.warning(f"TTS pre-warm skipped for this call: {err!r}")
 
     def enqueue_call(self, payload: QueueCallPayload, queue: Any = None) -> None:
         """Puts a call item onto the multiprocessing queue for worker execution.

@@ -61,6 +61,7 @@ from caller_prometheus_webhook.routes import (
 )
 from caller_prometheus_webhook.schemas import (
     DispatchItem,
+    extract_alert_messages,
     NotificationMode,
     PrometheusAlert,
     WebhookPayload,
@@ -111,34 +112,40 @@ async def producer(payload: Any, queue: asyncio.Queue) -> None:
     await queue.put(payload)
 
 
-async def do_call_only(our_receiver: str, our_message: str) -> None:
+async def do_call_only(our_receiver: str, our_message: str, lang: str | None = None) -> None:
     """Initiates a phone call to the specified receiver."""
     svc = _get_active_service()
-    await svc.do_call_only(our_receiver, our_message)
+    await svc.do_call_only(our_receiver, our_message, lang=lang)
 
 
-async def send_the_sms(the_number: str, the_message: str) -> None:
+async def send_the_sms(the_number: str, the_message: str, lang: str | None = None) -> None:
     """Sends an SMS message to the specified number."""
     svc = _get_active_service()
-    await svc.do_sms_only(the_number, the_message)
+    await svc.do_sms_only(the_number, the_message, lang=lang)
 
 
-async def schedule_sms_before_call(our_receiver: str, our_message: str) -> None:
+async def schedule_sms_before_call(
+    our_receiver: str, our_message: str, lang: str | None = None
+) -> None:
     """Sends an SMS, waits for a delay, then initiates a call."""
     svc = _get_active_service()
-    await svc._schedule_sms_before_call(our_receiver, our_message)
+    await svc._schedule_sms_before_call(our_receiver, our_message, lang=lang)
 
 
-async def do_sms_before_call(our_receiver: str, our_message: str) -> None:
+async def do_sms_before_call(
+    our_receiver: str, our_message: str, lang: str | None = None
+) -> None:
     """Schedules an SMS followed by phone call as a background task."""
     svc = _get_active_service()
-    await svc.do_sms_before_call(our_receiver, our_message)
+    await svc.do_sms_before_call(our_receiver, our_message, lang=lang)
 
 
-async def do_call_and_sms(our_receiver: str, our_message: str) -> None:
+async def do_call_and_sms(
+    our_receiver: str, our_message: str, lang: str | None = None
+) -> None:
     """Dispatches simultaneous SMS and call to the receiver."""
     svc = _get_active_service()
-    await svc.do_call_and_sms(our_receiver, our_message)
+    await svc.do_call_and_sms(our_receiver, our_message, lang=lang)
 
 
 take_this_action = {
@@ -150,16 +157,18 @@ take_this_action = {
 
 
 async def notification_actions(
-    our_receiver: str, our_message: str, caller_func: str
+    our_receiver: str, our_message: str, caller_func: str, lang: str | None = None
 ) -> None:
     """Executes the notification action specified by caller_func key."""
     action_fn = globals().get("take_this_action", take_this_action).get(
         caller_func, do_call_only
     )
-    await action_fn(our_receiver, our_message)
+    await action_fn(our_receiver, our_message, lang=lang)
 
 
-async def consumer(queue: asyncio.Queue, caller_func: str) -> None:
+async def consumer(
+    queue: asyncio.Queue, caller_func: str, lang: str | None = None
+) -> None:
     """Consumes items from queue and processes notification actions."""
     while True:
         our_message, our_receiver = await queue.get()
@@ -168,17 +177,21 @@ async def consumer(queue: asyncio.Queue, caller_func: str) -> None:
             f"Call/Message '{our_message}' for '{our_receiver}' through the endpoint '{caller_func}'"
         )
         actions_fn = globals().get("notification_actions", notification_actions)
-        await actions_fn(our_receiver, our_message, caller_func)
+        await actions_fn(our_receiver, our_message, caller_func, lang=lang)
         queue.task_done()
 
 
-async def do_the_call(the_number: str, the_message: str) -> None:
+async def do_the_call(
+    the_number: str, the_message: str, lang: str | None = None
+) -> None:
     """Legacy alias initiating a call to the specified number."""
     start_call_fn = globals().get("start_the_asterisk_call", start_the_asterisk_call)
-    await start_call_fn(the_number, the_message)
+    await start_call_fn(the_number, the_message, lang=lang)
 
 
-async def start_the_asterisk_call(phone: str, message: str) -> None:
+async def start_the_asterisk_call(
+    phone: str, message: str, lang: str | None = None
+) -> None:
     """Directly triggers outbound Asterisk call via AsteriskCallClient."""
     client = AsteriskCallClient(
         base_url=globals().get("ASTERISK_CALL_URL", ASTERISK_CALL_URL),
@@ -187,7 +200,7 @@ async def start_the_asterisk_call(phone: str, message: str) -> None:
         ),
         timeout_total=float(globals().get("CLIENT_TIMEOUT_TOTAL", CLIENT_TIMEOUT_TOTAL)),
     )
-    await client.place_call(phone, message)
+    await client.place_call(phone, message, lang=lang)
 
 
 async def send_message_to_caller_sms(phone: str, message: str) -> None:
@@ -201,15 +214,15 @@ async def send_message_to_caller_sms(phone: str, message: str) -> None:
 
 
 async def the_alert_description(request_payload: dict[str, Any]) -> list[str]:
-    """Extracts description from first firing alert in payload."""
-    payload = WebhookPayload.from_dict(request_payload)
-    return payload.firing_descriptions
+    """Returns the alert text for Alertmanager, Zabbix or generic payloads."""
+    return extract_alert_messages(request_payload)
 
 
 async def process_the_queue(
     prometheus_message: str,
     receiver_nums: Sequence[str],
     caller_func: str,
+    lang: str | None = None,
 ) -> None:
     """Processes a queue of notification tasks across receivers."""
     queue: asyncio.Queue = asyncio.Queue()
@@ -220,16 +233,24 @@ async def process_the_queue(
         asyncio.create_task(prod_fn((prometheus_message, single_receiver), queue))
         for single_receiver in receiver_nums
     ]
-    consumers = [asyncio.create_task(cons_fn(queue, caller_func))]
+    consumers = [asyncio.create_task(cons_fn(queue, caller_func, lang))]
     await asyncio.gather(*producers)
     await queue.join()
     for a_consumer in consumers:
         a_consumer.cancel()
 
 
-async def data_from_alert_manager(request: web.Request, caller_func: str) -> None:
+async def data_from_alert_manager(
+    request: web.Request,
+    caller_func: str,
+    custom_receivers: Sequence[str] | None = None,
+    lang: str | None = None,
+) -> None:
     """Processes alert data from incoming request and dispatches notifications."""
-    payload = await request.json()
+    parser = globals().get("parse_webhook_payload")
+    if parser is None:
+        from caller_prometheus_webhook.routes import parse_webhook_payload as parser
+    payload = await parser(request)
     desc_fn = globals().get("the_alert_description", the_alert_description)
     some_messages = await desc_fn(payload)
 
@@ -237,16 +258,26 @@ async def data_from_alert_manager(request: web.Request, caller_func: str) -> Non
         dedup_window = int(settings.get("DEDUPLICATION_WINDOW_SECONDS", 180))
         is_dup_fn = globals().get("is_duplicate_alert", is_duplicate_alert)
         queue_fn = globals().get("process_the_queue", process_the_queue)
-        receivers = globals().get("PROMETHEUS_WEBHOOK_RECEIVERS", PROMETHEUS_WEBHOOK_RECEIVERS)
+        receivers = custom_receivers or globals().get(
+            "PROMETHEUS_WEBHOOK_RECEIVERS", PROMETHEUS_WEBHOOK_RECEIVERS
+        )
+
+        is_test = False
+        if isinstance(payload, dict):
+            if payload.get("event") == "probe_alarm_test" or request.query.get("test") == "1":
+                is_test = True
+            for al in payload.get("alerts", []):
+                if al.get("labels", {}).get("alertname") == "WebhookTest":
+                    is_test = True
+                    break
 
         for the_message in some_messages:
-            if await is_dup_fn(the_message, ttl_seconds=dedup_window):
+            if not is_test and await is_dup_fn(the_message, ttl_seconds=dedup_window):
                 logging.info(
                     f"Deduplicated repeating alert within {dedup_window}s window. Skipping duplicate calls."
                 )
                 continue
-            await queue_fn(the_message, receivers, caller_func)
-
+            await queue_fn(the_message, receivers, caller_func, lang)
 
 async def init_app() -> web.Application:
     """Initializes and configures the aiohttp application."""
